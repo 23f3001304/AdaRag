@@ -11,6 +11,7 @@ import asyncio
 import json
 import os
 import shutil
+import tempfile
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -106,7 +107,7 @@ class GeminiCLILLM:
 
 @contextmanager
 def _temp_image(image: bytes) -> Iterator[Path]:
-    """Write image bytes to a temp PNG the CLIs can @-reference, removed afterwards."""
+    """Write image bytes to a temp PNG the Claude CLI can @-reference, removed afterwards."""
     tmp = Path("data") / f"_vis_{uuid.uuid4().hex}.png"
     tmp.parent.mkdir(parents=True, exist_ok=True)
     tmp.write_bytes(image)
@@ -114,6 +115,23 @@ def _temp_image(image: bytes) -> Iterator[Path]:
         yield tmp
     finally:
         tmp.unlink(missing_ok=True)
+
+
+@contextmanager
+def _temp_image_dir(image: bytes) -> Iterator[Path]:
+    """Write image bytes to a PNG in a throwaway dir OUTSIDE the repo, removed afterwards.
+
+    Gemini's @-references honor .gitignore and are confined to the workspace, so (unlike Claude)
+    its temp image can't live under the gitignored data/; it gets its own dir added via
+    --include-directories.
+    """
+    folder = Path(tempfile.mkdtemp(prefix="adarag_vis_"))
+    tmp = folder / "image.png"
+    tmp.write_bytes(image)
+    try:
+        yield tmp
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
 
 
 class ClaudeCliVision:
@@ -137,15 +155,17 @@ class ClaudeCliVision:
 
 
 class GeminiCliVision:
-    """Vision via the Gemini CLI: writes the image to a temp file it reads with an @reference."""
+    """Vision via the Gemini CLI: the @-referenced image goes in the -p prompt (not stdin), and
+    its directory is added to the workspace so Gemini's gitignore-aware file tool can read it."""
 
     def __init__(self, model: str = "", binary: str = "gemini") -> None:
         self.model = model
         self._binary = binary
 
     async def describe(self, image: bytes, prompt: str) -> str:
-        argv = [self._binary]
-        if self.model:
-            argv += ["-m", self.model]
-        with _temp_image(image) as tmp:
-            return (await _run(argv, f"{prompt}\n\n@{tmp.as_posix()}")).strip()
+        with _temp_image_dir(image) as tmp:
+            argv = [self._binary]
+            if self.model:
+                argv += ["-m", self.model]
+            argv += ["--include-directories", str(tmp.parent), "-p", f"{prompt} @{tmp.as_posix()}"]
+            return (await _run(argv, "")).strip()
