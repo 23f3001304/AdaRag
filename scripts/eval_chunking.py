@@ -38,18 +38,23 @@ def _norm(text: str) -> str:
 
 
 async def _build_spans(
-    gen: QAGenerator, docs: list[tuple[str, str]], chunker: Chunker
+    gen: QAGenerator, docs: list[tuple[str, str]], chunker: Chunker, per_doc: int = 2
 ) -> list[QAPair]:
-    """Verbatim-span QA; keep only spans that really occur in their source doc (findable gold)."""
+    """Verbatim-span QA, up to per_doc per doc (even coverage); skip spans not found verbatim."""
     qa: list[QAPair] = []
     for source, text in docs:
         doc_norm = _norm(text)
+        taken = 0
         for ch in chunker.chunk(text):
-            if len(qa) >= QA_LIMIT:
-                return qa
-            pair = await gen.span_from_chunk(gold_key(source, ch.index), source, ch.text)
+            if taken >= per_doc or len(qa) >= QA_LIMIT:
+                break
+            try:
+                pair = await gen.span_from_chunk(gold_key(source, ch.index), source, ch.text)
+            except Exception:  # a flaky CLI call shouldn't abort the whole eval
+                continue
             if pair is not None and _norm(pair.answer) in doc_norm:
                 qa.append(pair)
+                taken += 1
     return qa
 
 

@@ -17,8 +17,8 @@ def build_chunker(chunk_size: int, chunk_overlap: int, adaptive: bool = True) ->
     if not adaptive:
         return fallback
     strategies: dict[DocProfile, Chunker] = {
-        DocProfile.CODE: CodeChunker(),
-        DocProfile.PAPER: PaperSectionChunker(),
+        DocProfile.CODE: CodeChunker(fallback=fallback),
+        DocProfile.PAPER: PaperSectionChunker(fallback=fallback),
         DocProfile.NOTES: NotesChunker(),
     }
     return AdaptiveChunker(DocumentProfiler(), strategies, fallback)

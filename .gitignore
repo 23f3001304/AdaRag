@@ -17,6 +17,9 @@ __pycache__/
 DESIGN.md
 evaluation/corpus/design.txt
 
+# Scraped web corpus (local test data — large, not committed)
+evaluation/corpus/web_*.txt
+
 # Data, uploads, and caches
 /data/
 /storage/

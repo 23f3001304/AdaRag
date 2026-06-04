@@ -34,3 +34,12 @@ def test_defaults_to_prose():
 
 def test_empty_text_is_prose():
     assert P.profile("   \n\n  ") == DocProfile.PROSE
+
+
+def test_formula_prose_is_not_code():
+    text = (
+        "The weight is {\\displaystyle w_{t,d}}; it grows with the term frequency.\n"
+        "Each document maps to a vector in the space, and similarity follows.\n"
+        "The function of the model is to rank passages by their relevance.\n"
+    )
+    assert P.profile(text) != DocProfile.CODE

@@ -5,9 +5,10 @@ from __future__ import annotations
 import re
 from enum import StrEnum
 
+# Strong code signals only — definitions, imports, arrows. Deliberately NOT braces/semicolons or
+# indentation, which formula-heavy prose (LaTeX, math) trips over and gets misread as code.
 _CODE_LINE = re.compile(
-    r"^\s{4,}\S|[{};]\s*$|\bdef\s+\w+\s*\(|\bclass\s+\w+\s*[:(]"
-    r"|^\s*(import|from)\s+\w|\bfunction\s+\w+\s*\(|=>"
+    r"\bdef\s+\w+\s*\(|\bclass\s+\w+\s*[:(]|^\s*(?:import|from)\s+\w|\bfunction\s+\w+\s*\(|=>"
 )
 _HEADING = re.compile(r"^(#{1,6}\s+\S|\d+(\.\d+)*\.?\s+[A-Z])")
 _BULLET = re.compile(r"^\s*([-*•]|\d+[.)])\s+\S")
@@ -25,7 +26,7 @@ class DocProfile(StrEnum):
 class DocumentProfiler:
     """Content heuristics: code by syntax, papers by headings, notes by bullets; else prose."""
 
-    def __init__(self, code_threshold: float = 0.25, min_headings: int = 3) -> None:
+    def __init__(self, code_threshold: float = 0.15, min_headings: int = 3) -> None:
         self._code_threshold = code_threshold
         self._min_headings = min_headings
 
