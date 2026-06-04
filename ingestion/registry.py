@@ -7,7 +7,7 @@ from pathlib import Path
 from core.interfaces import VisionProvider
 from ingestion.audio import AudioPreprocessor
 from ingestion.base import Preprocessor, ProcessedDoc
-from ingestion.image import ImagePreprocessor
+from ingestion.image import CaptionAnalyzer, ImagePreprocessor
 from ingestion.pdf import PdfPreprocessor
 from ingestion.text import TextPreprocessor
 
@@ -28,5 +28,5 @@ def build_registry(vision: VisionProvider | None = None) -> PreprocessorRegistry
     text = TextPreprocessor()
     preprocessors: list[Preprocessor] = [text, PdfPreprocessor(), AudioPreprocessor()]
     if vision is not None:
-        preprocessors.append(ImagePreprocessor(vision))
+        preprocessors.append(ImagePreprocessor([CaptionAnalyzer(vision)]))
     return PreprocessorRegistry(preprocessors, fallback=text)
