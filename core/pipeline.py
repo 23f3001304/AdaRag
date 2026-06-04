@@ -144,7 +144,14 @@ class AnswerService:
         context = "\n\n".join(f"[{i + 1}] ({h.source}) {h.text}" for i, h in enumerate(hits))
         answer = await self._llm.generate(_ANSWER_PROMPT.format(context=context, query=query))
         citations = [
-            {"n": i + 1, "source": h.source, "chunk_id": h.chunk_id, "score": round(h.score, 4)}
+            {
+                "n": i + 1,
+                "source": h.source,
+                "chunk_id": h.chunk_id,
+                "score": round(h.score, 4),
+                "modality": h.modality,
+                "original_path": h.original_path,
+            }
             for i, h in enumerate(hits)
         ]
         return {"answer": answer.strip(), "citations": citations}
