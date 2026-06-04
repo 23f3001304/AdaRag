@@ -1,0 +1,29 @@
+# Never ship these into the image:
+.venv/
+.git/
+.gitignore
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Secrets and local config
+.env
+.env.*
+.claude/
+
+# Data volumes / caches
+qdrant_storage/
+pg_data/
+hf_cache/
+.huggingface/
+
+# Web (not part of the API image)
+web/node_modules/
+web/.next/
+web/out/
+
+# Build metadata
+Dockerfile
+.dockerignore

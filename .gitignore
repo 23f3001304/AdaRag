@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# uv / virtualenv  (uv.lock IS committed — do not ignore it)
+.venv/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Data, uploads, and caches
+/data/
+/storage/
+*.sqlite
+.cache/
+# Model weight caches (bge-m3, rerankers, whisper, …)
+hf_cache/
+.huggingface/
+
+# Local Docker volumes (if bind-mounted)
+qdrant_storage/
+pg_data/
+
+# Web / Next.js (Phase 6)
+web/node_modules/
+web/.next/
+web/out/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Claude Code (local, machine-specific hook paths)
+.claude/settings.local.json

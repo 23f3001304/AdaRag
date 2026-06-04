@@ -1,0 +1,63 @@
+[project]
+name = "adaptive-rag"
+version = "0.1.0"
+description = "Adaptive multimodal RAG: profile every file, route it to the right ingestion path, retrieve over a hybrid index, and self-tune against a cost-aware objective."
+readme = "README.md"
+requires-python = "==3.12.*"
+# Phase 0 deps, added per micro-step so each step's footprint stays legible.
+# Still pending: provider SDKs + bge-m3/torch (0.4).
+dependencies = [
+    # web / api (0.1)
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.30",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.4",
+    "python-multipart>=0.0.12",
+    # infra clients (0.3)
+    "qdrant-client>=1.12",
+    "sqlalchemy[asyncio]>=2.0",
+    "asyncpg>=0.29",
+    # providers (0.4) — latest verified on PyPI 2026-06-04
+    "anthropic>=0.69",
+    "openai>=2.0",
+    "ollama>=0.6",
+    # local embeddings: bge-m3 via FlagEmbedding (dense now; sparse in Phase 1). Heavy: pulls torch.
+    "FlagEmbedding>=1.4",
+    "torch>=2.8",  # cu128 (Blackwell) index tops out at 2.11.x; 2.12 isn't published for cu128 yet
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.6",
+]
+
+# This is an application, not a library: uv manages the venv + deps but does not
+# build/install the project itself. The repo root is on the import path (WORKDIR in Docker).
+[tool.uv]
+package = false
+# uv 0.11.x managed-Python downloads hit a "minor version link" bug on this Windows host,
+# so use a system interpreter only: locally the winget Python 3.12, in Docker the
+# python:3.12 base image. Keeps host and container on the same interpreter.
+python-preference = "only-system"
+
+# Pull torch from the PyTorch CUDA 12.8 index (cu128) — required for RTX 50-series / Blackwell
+# (sm_120). A CUDA build still runs on CPU when no GPU is present, so it's safe everywhere.
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
