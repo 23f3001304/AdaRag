@@ -1,4 +1,4 @@
-"""Reset the corpus, ingest the sample doc, build a QA eval set, and score retrieval.
+"""Reset the corpus, ingest the sample doc, build a QA eval set, and score retrieval + generation.
 
 Run: uv run python scripts/eval_retrieval.py
 """
@@ -17,13 +17,15 @@ from sqlalchemy import text  # noqa: E402
 from chunking.naive import NaiveChunker  # noqa: E402
 from core.config import Settings  # noqa: E402
 from core.db import Database  # noqa: E402
-from core.pipeline import IngestService  # noqa: E402
+from core.pipeline import AnswerService, IngestService  # noqa: E402
 from evaluation.dataset_builder import EvalSetBuilder  # noqa: E402
 from evaluation.datasets import QAGenerator  # noqa: E402
+from evaluation.judge import AnswerJudge  # noqa: E402
 from evaluation.runner import EvalRunner  # noqa: E402
 from index.qdrant_client import create_qdrant  # noqa: E402
 from index.qdrant_hybrid import QdrantIndex  # noqa: E402
 from providers.factory import ProviderFactory  # noqa: E402
+from rerank.cross_encoder import CrossEncoderReranker  # noqa: E402
 from retrieval.hybrid import HybridRetriever  # noqa: E402
 
 
@@ -50,9 +52,14 @@ async def main() -> None:
     n = await EvalSetBuilder(QAGenerator(llm), db).build()
 
     retriever = HybridRetriever(embedder, index, s.rerank_candidates)
-    m = await EvalRunner(retriever, db).run_retrieval()
-    print(f"eval questions: {n}  (n={m.n})")
-    print(f"recall@{s.rerank_candidates}={m.recall_at_k:.3f}  MRR={m.mrr:.3f}  nDCG={m.ndcg:.3f}")
+    answer = AnswerService(retriever, CrossEncoderReranker(s.rerank_model), llm, s.top_k)
+    runner = EvalRunner(retriever, answer, AnswerJudge(llm), db)
+    rm = await runner.run_retrieval()
+    gm = await runner.run_generation()
+
+    print(f"questions={n}")
+    print(f"retrieval  recall={rm.recall_at_k:.2f}  mrr={rm.mrr:.2f}  ndcg={rm.ndcg:.2f}")
+    print(f"generation faithfulness={gm.faithfulness:.2f}  relevance={gm.answer_relevance:.2f}")
 
     await db.dispose()
     await qdrant.close()

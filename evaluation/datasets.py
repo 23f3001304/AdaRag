@@ -26,7 +26,7 @@ Passage:
 {text}"""
 
 
-def _extract_json(raw: str) -> dict:
+def extract_json(raw: str) -> dict:
     """Pull the first {...} object out of an LLM reply (tolerates surrounding prose/markdown)."""
     match = re.search(r"\{.*\}", raw, re.DOTALL)
     if not match:
@@ -45,7 +45,7 @@ class QAGenerator:
 
     async def from_chunk(self, chunk_id: str, source: str, text: str) -> QAPair | None:
         """Generate one QA pair grounded in a chunk; returns None if the reply is unusable."""
-        data = _extract_json(await self._llm.generate(_GEN_PROMPT.format(text=text)))
+        data = extract_json(await self._llm.generate(_GEN_PROMPT.format(text=text)))
         if not data.get("question") or not data.get("answer"):
             return None
         return QAPair(str(data["question"]), str(data["answer"]), chunk_id, source)
