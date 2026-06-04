@@ -39,6 +39,15 @@ class Settings(BaseSettings):
     chunk_size: int = 512
     chunk_overlap: int = 64
 
+    # Enrichment (Phase 2): LLM context prepended per chunk before embedding + carried into rerank.
+    # On by default — the A/B (evaluation/BASELINE.md) shows a large end-to-end lift on realistic
+    # (topic-named) queries: recall@3 +0.22, MRR +0.20 post-rerank. Costs one LLM call per chunk.
+    enrich_context: bool = True
+    # Metadata enrichment (Phase 2): entities/dates -> payload filters, keyphrases -> sparse boost.
+    # Off by default — its A/B is a retrieval wash (redundant with context); kept for the future
+    # query-layer metadata filters (entities/dates land in the payload). See evaluation/BASELINE.md.
+    enrich_metadata: bool = False
+
     # Cost / tuning
     cost_budget: str = "balanced"
 

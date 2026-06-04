@@ -33,11 +33,16 @@ class CrossEncoderReranker:
             self._model = CrossEncoder(self._model_name, device=self.device)
         return self._model
 
+    @staticmethod
+    def _passage(h: Retrieved) -> str:
+        """Score the chunk together with its situating context, when enrichment supplied one."""
+        return f"{h.context}\n\n{h.text}" if h.context else h.text
+
     def _rerank(self, query: str, hits: list[Retrieved], top_k: int) -> list[Retrieved]:
-        scores = self._load().predict([[query, h.text] for h in hits])
+        scores = self._load().predict([[query, self._passage(h)] for h in hits])
         ranked = sorted(zip(hits, scores, strict=True), key=lambda hs: hs[1], reverse=True)
         return [
-            Retrieved(h.chunk_id, _sigmoid(float(s)), h.text, h.source, h.position)
+            Retrieved(h.chunk_id, _sigmoid(float(s)), h.text, h.source, h.position, h.context)
             for h, s in ranked[:top_k]
         ]
 

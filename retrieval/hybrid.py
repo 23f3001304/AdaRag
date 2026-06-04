@@ -20,6 +20,7 @@ class Retrieved:
     text: str
     source: str
     position: int
+    context: str = ""  # situating context (enrichment); scored at rerank, never displayed/cited
 
 
 class HybridRetriever:
@@ -40,6 +41,7 @@ class HybridRetriever:
                 text=p.payload.get("text", ""),
                 source=p.payload.get("source", ""),
                 position=p.payload.get("position", -1),
+                context=p.payload.get("context", ""),
             )
             for p in points
         ]

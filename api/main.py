@@ -13,6 +13,8 @@ from chunking.naive import NaiveChunker
 from core.config import get_settings
 from core.db import Database
 from core.pipeline import AnswerService, IngestService
+from enrichment.contextual import ContextualEnricher
+from enrichment.metadata import MetadataEnricher
 from index.qdrant_client import create_qdrant
 from index.qdrant_hybrid import QdrantIndex
 from providers.factory import ProviderFactory
@@ -32,12 +34,15 @@ async def lifespan(app: FastAPI):
     chunker = NaiveChunker(settings.chunk_size, settings.chunk_overlap)
     retriever = HybridRetriever(embedder, index, settings.rerank_candidates)
     reranker = CrossEncoderReranker(settings.rerank_model)
+    llm = providers.llm()
+    enricher = ContextualEnricher(llm) if settings.enrich_context else None
+    metadata = MetadataEnricher(llm) if settings.enrich_metadata else None
 
     await db.create_all()
     app.state.db = db
     app.state.qdrant = qdrant
-    app.state.ingest = IngestService(chunker, embedder, index, db)
-    app.state.answer = AnswerService(retriever, reranker, providers.llm(), settings.top_k)
+    app.state.ingest = IngestService(chunker, embedder, index, db, enricher, metadata)
+    app.state.answer = AnswerService(retriever, reranker, llm, settings.top_k)
     try:
         yield
     finally:

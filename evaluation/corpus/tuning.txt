@@ -1,0 +1,7 @@
+Tuning the pipeline against the eval set
+
+Every stage of the pipeline exposes a knob: how large a chunk is, how much neighboring chunks overlap, how many candidates the reranker sees, how dense and sparse scores are weighted, and how many passages reach the generator. These knobs interact, so setting them one at a time tends to find a local best rather than a good whole.
+
+AdaRag searches the configuration space with a multi-objective study that treats answer quality, token cost, and latency as competing goals. Rather than collapse them into one number, it keeps the set of configurations where improving any objective would worsen another, then picks from that frontier according to the budget the operator chose.
+
+The whole search is only as trustworthy as the golden set it scores against, which is why the evaluation harness comes first. A sweep that optimizes a weak metric will confidently ship a worse pipeline while reporting that it improved.

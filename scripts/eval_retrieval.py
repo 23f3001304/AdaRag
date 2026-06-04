@@ -12,15 +12,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from sqlalchemy import text  # noqa: E402
-
 from chunking.naive import NaiveChunker  # noqa: E402
 from core.config import Settings  # noqa: E402
 from core.db import Database  # noqa: E402
 from core.pipeline import AnswerService, IngestService  # noqa: E402
+from enrichment.contextual import ContextualEnricher  # noqa: E402
 from evaluation.dataset_builder import EvalSetBuilder  # noqa: E402
 from evaluation.datasets import QAGenerator  # noqa: E402
 from evaluation.judge import AnswerJudge  # noqa: E402
+from evaluation.reset import reset_corpus  # noqa: E402
 from evaluation.runner import EvalRunner  # noqa: E402
 from index.qdrant_client import create_qdrant  # noqa: E402
 from index.qdrant_hybrid import QdrantIndex  # noqa: E402
@@ -39,15 +39,11 @@ async def main() -> None:
     llm = ProviderFactory(s).llm()
 
     # reset to a clean, known corpus
-    try:
-        await qdrant.delete_collection(s.qdrant_collection)
-    except Exception:  # best-effort reset
-        pass
-    async with db.session() as session:
-        await session.execute(text("TRUNCATE documents, chunks, eval_questions CASCADE"))
-        await session.commit()
+    await reset_corpus(qdrant, db, s.qdrant_collection)
 
-    ingest = IngestService(NaiveChunker(s.chunk_size, s.chunk_overlap), embedder, index, db)
+    enricher = ContextualEnricher(llm) if s.enrich_context else None
+    chunker = NaiveChunker(s.chunk_size, s.chunk_overlap)
+    ingest = IngestService(chunker, embedder, index, db, enricher)
     for doc in sorted((ROOT / "evaluation" / "corpus").glob("*.txt")):
         await ingest.ingest(doc.name, doc.read_text(encoding="utf-8"))
     n = await EvalSetBuilder(QAGenerator(llm), db).build()

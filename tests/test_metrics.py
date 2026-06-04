@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 
-from evaluation.metrics import retrieval_metrics
+from evaluation.metrics import recall_at_k, retrieval_metrics
 
 
 def test_perfect_rank_one():
@@ -35,3 +35,15 @@ def test_empty_results():
     m = retrieval_metrics([])
     assert m.n == 0
     assert m.recall_at_k == 0.0
+
+
+def test_recall_at_k_truncates_to_top_k():
+    results = [(["x", "y", "a", "b"], "a")]  # gold at rank 3
+    assert recall_at_k(results, 3) == 1.0
+    assert recall_at_k(results, 2) == 0.0  # gold falls outside the top-2
+
+
+def test_recall_at_k_averages_and_empty():
+    results = [(["a"], "a"), (["x", "y"], "a")]  # one hit, one miss
+    assert recall_at_k(results, 5) == 0.5
+    assert recall_at_k([], 3) == 0.0

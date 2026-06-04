@@ -1,0 +1,7 @@
+Situating a chunk before embedding
+
+A chunk pulled out of its document often loses the thread. A sentence that says the model is then fine-tuned on the labeled set is clear in place but ambiguous alone, because nothing in the chunk names the model or the task. Embedding it in isolation therefore buries it for any query that does not happen to reuse its exact words.
+
+Contextual retrieval fixes this by prepending a short, generated description that locates the chunk in its source before the chunk is embedded. A language model reads the whole document and the chunk, then writes a sentence or two naming the section, the subject, and the surrounding argument. Only this enriched text is embedded; the original chunk is what gets shown and cited, so provenance is untouched.
+
+The payoff is recall on exactly the ambiguous passages that bare embedding loses, at the price of one extra model call per chunk during ingestion. Because the added context is short and specific, it sharpens both the dense and the sparse representation without drowning out the chunk's own content.

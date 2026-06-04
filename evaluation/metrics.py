@@ -35,3 +35,11 @@ def retrieval_metrics(results: list[tuple[list[str], str]]) -> RetrievalMetrics:
             ndcg += 1.0 / math.log2(rank + 1)  # single relevant item: IDCG == 1
     n = len(results)
     return RetrievalMetrics(recall / n, mrr / n, ndcg / n, n)
+
+
+def recall_at_k(results: list[tuple[list[str], str]], k: int) -> float:
+    """Fraction of queries whose relevant id appears in the top-k retrieved (rank-truncated)."""
+    if not results:
+        return 0.0
+    hits = sum(1 for retrieved, relevant in results if relevant in retrieved[:k])
+    return hits / len(results)

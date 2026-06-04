@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import json
-import re
 from dataclasses import dataclass
 
 from core.interfaces import LLMProvider
+from core.json_extract import extract_json
 
 
 @dataclass(frozen=True)
@@ -25,16 +24,28 @@ concise answer. Reply as JSON: {{"question": "...", "answer": "..."}} and nothin
 Passage:
 {text}"""
 
+_HARD_GEN_PROMPT = """You are given a document and one chunk from it.
 
-def extract_json(raw: str) -> dict:
-    """Pull the first {...} object out of an LLM reply (tolerates surrounding prose/markdown)."""
-    match = re.search(r"\{.*\}", raw, re.DOTALL)
-    if not match:
-        return {}
-    try:
-        return json.loads(match.group(0))
-    except json.JSONDecodeError:
-        return {}
+<document>
+{document}
+</document>
+
+<chunk>
+{chunk}
+</chunk>
+
+Write a search query a user would type to find the information in the chunk. The user knows the \
+document's topic but has not seen this chunk, so name the subject explicitly using the document's \
+terminology, and do NOT copy distinctive wording from the chunk. Also give a short answer drawn \
+from the chunk. Reply as JSON: {{"question": "...", "answer": "..."}} and nothing else."""
+
+_TERM_GEN_PROMPT = """\
+Write a short search query that hinges on a specific named thing in the passage — a product,
+technology, tool, or proper noun someone would recall and search by. Include that term, and
+give a short answer from the passage. Reply as JSON only: {{"question": "...", "answer": "..."}}.
+
+Passage:
+{text}"""
 
 
 class QAGenerator:
@@ -46,6 +57,28 @@ class QAGenerator:
     async def from_chunk(self, chunk_id: str, source: str, text: str) -> QAPair | None:
         """Generate one QA pair grounded in a chunk; returns None if the reply is unusable."""
         data = extract_json(await self._llm.generate(_GEN_PROMPT.format(text=text)))
+        if not data.get("question") or not data.get("answer"):
+            return None
+        return QAPair(str(data["question"]), str(data["answer"]), chunk_id, source)
+
+    async def hard_from_chunk(
+        self, chunk_id: str, source: str, document: str, text: str
+    ) -> QAPair | None:
+        """Generate a realistic query that names the subject but does not quote the chunk.
+
+        This is the query shape contextual enrichment is meant to help: an ambiguous chunk
+        (pronouns, "this approach") matches a topic-named query only once it carries a situating
+        context. Returns None if the reply is unusable.
+        """
+        prompt = _HARD_GEN_PROMPT.format(document=document[:6000], chunk=text)
+        data = extract_json(await self._llm.generate(prompt))
+        if not data.get("question") or not data.get("answer"):
+            return None
+        return QAPair(str(data["question"]), str(data["answer"]), chunk_id, source)
+
+    async def term_from_chunk(self, chunk_id: str, source: str, text: str) -> QAPair | None:
+        """Generate a query hinging on a specific named term in the chunk (the exact-match case)."""
+        data = extract_json(await self._llm.generate(_TERM_GEN_PROMPT.format(text=text)))
         if not data.get("question") or not data.get("answer"):
             return None
         return QAPair(str(data["question"]), str(data["answer"]), chunk_id, source)

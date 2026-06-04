@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from core.interfaces import LLMProvider
-from evaluation.datasets import extract_json
+from core.json_extract import extract_json
 
 
 @dataclass(frozen=True)

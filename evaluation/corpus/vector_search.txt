@@ -1,0 +1,7 @@
+Approximate nearest-neighbor search
+
+Dense retrieval turns each chunk into a single fixed-length vector and finds the passages whose vectors lie closest to the query vector. AdaRag stores these vectors in Qdrant and compares them with cosine similarity, so a passage ranks highly when its direction in embedding space aligns with the question, even when the two share no words at all.
+
+Scoring every vector exhaustively is too slow once a collection grows past a few thousand chunks, so the index is built as a hierarchical navigable small-world graph. The graph links each vector to its near neighbors across several layers, and a search walks down from the top layer to greedily hop toward the query, touching only a small fraction of the collection. The trade-off is recall: a smaller search budget returns faster but can miss a relevant neighbor that a full scan would have found.
+
+Because the representation is a single vector, dense search captures meaning but blurs detail. It excels at paraphrase and synonymy yet struggles with rare tokens, exact identifiers, and proper nouns, which is why AdaRag pairs it with a lexical index rather than trusting it alone.

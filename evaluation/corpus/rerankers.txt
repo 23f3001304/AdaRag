@@ -1,0 +1,7 @@
+Cross-encoder reranking
+
+A first-stage retriever has to be fast, so it compares precomputed vectors and never reads the query and a passage together. A reranker pays for precision instead. It feeds the query and a candidate passage into a single transformer at once, letting every query token attend to every passage token, and emits one relevance score for the pair.
+
+This joint attention is what makes the second stage sharper than vector similarity, because the model can tell that a passage mentions the query's subject only in passing rather than truly answering it. AdaRag runs a bge-reranker-v2-m3 cross-encoder over the fused candidate pool and keeps only the reordered top results for the generator.
+
+The cost is latency: scoring twenty candidates means twenty transformer passes, so the reranker runs on a short list rather than the whole collection. Choosing how many candidates to admit is a tuning decision that trades recall against speed, and it is one of the knobs the pipeline sweeps.

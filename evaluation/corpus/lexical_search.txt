@@ -1,0 +1,7 @@
+Lexical matching and sparse vectors
+
+Where dense retrieval generalizes, lexical retrieval is literal. It scores a passage by the query terms it actually contains, weighting each term by how often it appears in the passage and how rare it is across the corpus, so a distinctive word counts for far more than a common one. This is the classic BM25 idea, and it stays decisive whenever the answer hinges on an exact symbol, an error code, or a proper noun.
+
+AdaRag produces a sparse vector for every chunk in the same forward pass that yields its dense vector. The sparse vector lists token identifiers with learned weights rather than raw counts, which lets the model down-weight filler and emphasize the terms that carry meaning. Stored alongside the dense vector in Qdrant, it answers the same nearest-neighbor query interface.
+
+Lexical and dense signals fail in opposite situations, so fusing them covers more ground than either alone. The fusion step combines the two ranked lists by rank rather than by raw score, which keeps a passage that one method ranked first competitive even when the other method missed it entirely.

@@ -1,0 +1,7 @@
+Expanding the query
+
+A user's question is often shorter and vaguer than the passage that answers it, which leaves a gap that retrieval has to bridge. Query expansion narrows that gap by rewriting the question into something closer to the language of the corpus before any vectors are compared.
+
+One approach generates a hypothetical answer to the question and embeds that instead of, or alongside, the raw query, on the theory that a fake answer sits nearer the real one in embedding space than the bare question does. Another issues several paraphrases of the question in parallel and merges their results, so a single awkward phrasing does not sink an otherwise findable passage. Both trade extra computation and the risk of drift for a wider net.
+
+These rewrites help most when the corpus uses vocabulary the user is unlikely to guess, and least when the question already quotes the source. AdaRag treats expansion as an optional stage that the tuner can switch on when the evaluation set shows it earning its cost.

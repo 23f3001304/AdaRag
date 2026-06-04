@@ -1,0 +1,7 @@
+Grounded answer generation
+
+Once the top passages are chosen, the generator assembles them into a single context block and asks the language model to answer using only what that block contains. Each passage is numbered so the model can cite it inline, and the prompt instructs the model to say when the context does not hold the answer rather than guess at one.
+
+Grounding the answer in retrieved text is what separates this from a plain chatbot reply, because every claim is meant to trace back to a passage the user can open and check. When retrieval misses, the generator should fail loudly and admit the gap; a confident answer built on the wrong passages is worse than no answer, since it hides its own error behind fluent prose.
+
+The quality of generation therefore rides on the quality of retrieval before it. AdaRag scores the two stages separately, so a drop in faithfulness can be blamed on the stage that caused it instead of being averaged away into a single misleading number.
