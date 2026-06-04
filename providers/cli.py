@@ -12,6 +12,8 @@ import json
 import os
 import shutil
 
+from core.usage import METER
+
 DEFAULT_TIMEOUT = 120.0
 
 
@@ -67,6 +69,13 @@ class ClaudeCodeLLM:
             raise CLIError(f"unexpected claude output: {raw[:300]!r}") from exc
         if data.get("is_error"):
             raise CLIError(f"claude: {data.get('result', 'error')}")
+        usage = data.get("usage", {})
+        METER.record(
+            cost_usd=float(data.get("total_cost_usd") or 0.0),
+            input_tokens=int(usage.get("input_tokens") or 0),
+            output_tokens=int(usage.get("output_tokens") or 0),
+            ms=float(data.get("duration_ms") or 0.0),
+        )
         return data["result"]
 
 
