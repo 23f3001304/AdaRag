@@ -23,7 +23,11 @@ dependencies = [
     "ollama>=0.6",
     # local embeddings: bge-m3 via FlagEmbedding (dense now; sparse in Phase 1). Heavy: pulls torch.
     "FlagEmbedding>=1.4",
+    # FlagEmbedding's inference imports its finetune path (transformers TrainingArguments), which
+    # needs accelerate — it doesn't declare it, so a clean (Docker) install breaks without this.
+    "accelerate>=1.0",
     "torch>=2.8",  # cu128 (Blackwell) index tops out at 2.11.x; 2.12 isn't published for cu128 yet
+    "torchvision>=0.21",  # CPU build pinned in [tool.uv.sources] so its nms op ABI-matches cu128 torch
     "tree-sitter>=0.25.2",
     "tree-sitter-language-pack>=1.8.1",
     "pypdf>=6.12.2",
@@ -54,8 +58,19 @@ name = "pytorch-cu128"
 url = "https://download.pytorch.org/whl/cu128"
 explicit = true
 
+# torchvision pinned to the CPU build: its compiled ops (e.g. nms) must be ABI-matched to torch, and
+# the cu128 index ships no matching torchvision. The +cpu build registers fine against torch
+# 2.11.0+cu128 (it only needs torch's version-matched C++ core) — exactly the combo proven on the
+# host. A mismatched torchvision raises "operator torchvision::nms does not exist", which cascades
+# through transformers/peft and breaks the bge-m3 import outright.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
 [tool.uv.sources]
 torch = { index = "pytorch-cu128" }
+torchvision = { index = "pytorch-cpu" }
 
 [tool.ruff]
 line-length = 100

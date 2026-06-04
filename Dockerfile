@@ -1,8 +1,9 @@
+# syntax=docker/dockerfile:1
 # AdaRag API image — CUDA torch for in-container GPU (run the api service with --gpus all).
 FROM python:3.12-slim
 
-# libgomp1: OpenMP runtime that torch / numpy / scipy load at import on the slim base.
-RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 \
+# libgomp1: OpenMP runtime torch/numpy/scipy load at import. libglib2.0-0: OpenCV (easyocr) runtime.
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # uv for fast, locked installs (copied from the official uv image).
@@ -14,9 +15,10 @@ ENV UV_PYTHON_DOWNLOADS=never \
 
 WORKDIR /app
 
-# Install dependencies first so this layer caches until the lockfile changes.
+# Install dependencies first so this layer caches until the lockfile changes. The BuildKit cache
+# mount keeps uv's wheel cache across builds, so a lockfile change only fetches what actually changed.
 COPY pyproject.toml uv.lock README.md ./
-RUN uv sync --frozen --no-dev
+RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --no-dev
 
 # Application source.
 COPY . .

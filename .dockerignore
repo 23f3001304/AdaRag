@@ -19,6 +19,12 @@ pg_data/
 hf_cache/
 .huggingface/
 
+# Large local media + scraped test corpus + tests — runtime/test only, never in the image
+# (keeps the COPY-source layer from rebuilding when these change).
+data/
+evaluation/corpus/web_*.txt
+tests/
+
 # Web (not part of the API image)
 web/node_modules/
 web/.next/

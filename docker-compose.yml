@@ -55,9 +55,15 @@ services:
       LLM_PROVIDER: cli-bridge
       VISION_PROVIDER: cli-bridge
       CLI_BRIDGE_URL: http://host.docker.internal:8088
+      # In-container OCR off: the bridge caption already transcribes text, and easyocr's torchvision
+      # isn't ABI-matched to our cu128 torch in the image (host OCR still uses easyocr). See BASELINE.
+      OCR_PROVIDER: "none"
     # Lets the container resolve the host (for the bridge) on Linux too; Docker Desktop adds it.
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    volumes:
+      # Persist downloaded models (bge-m3, reranker) across recreates — fetch them once, not per build.
+      - hf_cache:/root/.cache/huggingface
     ports:
       - "8000:8000"
     # GPU passthrough (Docker Desktop + WSL2): lets the in-container bge-m3 embedder use the 5080.
@@ -77,3 +83,4 @@ services:
 volumes:
   qdrant_storage:
   pg_data:
+  hf_cache:   # cached HF model weights (bge-m3, reranker) for the api container
