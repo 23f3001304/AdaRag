@@ -13,4 +13,5 @@ class TextPreprocessor:
     extensions = (".txt", ".md")
 
     async def process(self, path: Path) -> ProcessedDoc:
-        return ProcessedDoc(path.name, "text", path.read_text(encoding="utf-8"), str(path))
+        text = path.read_text(encoding="utf-8", errors="replace")  # tolerate stray bytes
+        return ProcessedDoc(path.name, "text", text, str(path))

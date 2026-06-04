@@ -17,6 +17,7 @@ from enrichment.contextual import ContextualEnricher
 from enrichment.metadata import MetadataEnricher
 from index.qdrant_client import create_qdrant
 from index.qdrant_hybrid import QdrantIndex
+from ingestion.registry import build_registry
 from providers.factory import ProviderFactory
 from rerank.cross_encoder import CrossEncoderReranker
 from retrieval.hybrid import HybridRetriever
@@ -36,6 +37,8 @@ async def lifespan(app: FastAPI):
     retriever = HybridRetriever(embedder, index, settings.rerank_candidates)
     reranker = CrossEncoderReranker(settings.rerank_model)
     llm = providers.llm()
+    # Registry preprocesses uploads of any modality (image -> caption+OCR, audio/video -> text).
+    registry = build_registry(providers.vision(), settings.ocr_provider)
     enricher = ContextualEnricher(llm) if settings.enrich_context else None
     metadata = MetadataEnricher(llm) if settings.enrich_metadata else None
     transform = None
@@ -48,6 +51,7 @@ async def lifespan(app: FastAPI):
     await db.create_all()
     app.state.db = db
     app.state.qdrant = qdrant
+    app.state.registry = registry
     app.state.ingest = IngestService(chunker, embedder, index, db, enricher, metadata)
     app.state.answer = AnswerService(
         retriever, reranker, llm, settings.top_k, transform, query_meta
