@@ -34,3 +34,14 @@ class Chunk(Base):
     text: Mapped[str] = mapped_column(Text)
 
     document: Mapped[Document] = relationship(back_populates="chunks")
+
+
+class EvalQuestion(Base):
+    __tablename__ = "eval_questions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    document_id: Mapped[str] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
+    chunk_id: Mapped[str] = mapped_column(String(36))  # the relevant chunk (for recall@k)
+    question: Mapped[str] = mapped_column(Text)
+    answer: Mapped[str] = mapped_column(Text)
+    is_gold: Mapped[bool] = mapped_column(default=False)  # hand-labeled vs generated
