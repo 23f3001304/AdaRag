@@ -51,6 +51,9 @@ class Settings(BaseSettings):
     # Adaptive chunking (Phase 3): profile each doc -> code-AST / paper-section / notes; else naive.
     adaptive_chunking: bool = True
 
+    # Query layer (Phase 4): LLM rewrites/expands the query before retrieval; rerank on original.
+    rewrite_query: bool = False
+
     # Cost / tuning
     cost_budget: str = "balanced"
 

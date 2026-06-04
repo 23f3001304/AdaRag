@@ -14,6 +14,7 @@ from enrichment.metadata import ChunkMetadata, MetadataEnricher
 from index.qdrant_hybrid import QdrantIndex
 from rerank.base import Reranker
 from retrieval.hybrid import HybridRetriever
+from retrieval.query_rewrite import QueryRewriter
 
 
 class IngestService:
@@ -110,15 +111,22 @@ class AnswerService:
     """Retrieve candidates, rerank them, and generate a cited answer from the top_k."""
 
     def __init__(
-        self, retriever: HybridRetriever, reranker: Reranker, llm: LLMProvider, top_k: int
+        self,
+        retriever: HybridRetriever,
+        reranker: Reranker,
+        llm: LLMProvider,
+        top_k: int,
+        rewriter: QueryRewriter | None = None,
     ) -> None:
         self._retriever = retriever
         self._reranker = reranker
         self._llm = llm
         self._top_k = top_k
+        self._rewriter = rewriter
 
     async def answer(self, query: str) -> dict:
-        candidates = await self._retriever.retrieve(query)
+        search = await self._rewriter.rewrite(query) if self._rewriter else query
+        candidates = await self._retriever.retrieve(search)
         hits = await self._reranker.rerank(query, candidates, self._top_k)
         if not hits:
             return {"answer": "No documents have been ingested yet.", "citations": []}

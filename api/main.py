@@ -20,6 +20,7 @@ from index.qdrant_hybrid import QdrantIndex
 from providers.factory import ProviderFactory
 from rerank.cross_encoder import CrossEncoderReranker
 from retrieval.hybrid import HybridRetriever
+from retrieval.query_rewrite import QueryRewriter
 
 
 @asynccontextmanager
@@ -37,12 +38,13 @@ async def lifespan(app: FastAPI):
     llm = providers.llm()
     enricher = ContextualEnricher(llm) if settings.enrich_context else None
     metadata = MetadataEnricher(llm) if settings.enrich_metadata else None
+    rewriter = QueryRewriter(llm) if settings.rewrite_query else None
 
     await db.create_all()
     app.state.db = db
     app.state.qdrant = qdrant
     app.state.ingest = IngestService(chunker, embedder, index, db, enricher, metadata)
-    app.state.answer = AnswerService(retriever, reranker, llm, settings.top_k)
+    app.state.answer = AnswerService(retriever, reranker, llm, settings.top_k, rewriter)
     try:
         yield
     finally:
