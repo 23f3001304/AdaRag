@@ -61,3 +61,14 @@ async def test_image_preprocessor_skips_empty_analyzers(tmp_path: Path):
 def test_image_preprocessor_requires_an_analyzer():
     with pytest.raises(ValueError, match="at least one analyzer"):
         ImagePreprocessor([])
+
+
+async def test_registry_routes_images_when_ocr_enabled():
+    # easyocr's heavy model loads lazily (on first analyze), so building the registry is cheap.
+    reg = build_registry(ocr_provider="easyocr")
+    assert ".png" in reg._by_ext  # images now route to the OCR-backed ImagePreprocessor
+
+
+def test_registry_rejects_unknown_ocr_provider():
+    with pytest.raises(ValueError, match="Unknown ocr_provider"):
+        build_registry(ocr_provider="tesseract")

@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     llm_model: str = "qwen3:8b-q8_0"
     vision_provider: str = "anthropic"
     vision_model: str = "claude-sonnet-4-6"
+    # Image OCR analyzer (Phase 4B): a dedicated local engine transcribes image text verbatim and
+    # fuses it with the vision caption. "easyocr" (GPU, free, exact) or "" / "none" to disable.
+    ocr_provider: str = "easyocr"
     embedding_provider: str = "local"
     embedding_model: str = "BAAI/bge-m3"
 

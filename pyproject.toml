@@ -28,6 +28,7 @@ dependencies = [
     "tree-sitter-language-pack>=1.8.1",
     "pypdf>=6.12.2",
     "faster-whisper>=1.2.1",
+    "easyocr>=1.7.2",  # dedicated local OCR analyzer for images (GPU via the cu128 torch)
 ]
 
 [dependency-groups]

@@ -50,7 +50,7 @@ async def main() -> None:
     vision = ProviderFactory(s).vision()
     chunker = build_chunker(s.chunk_size, s.chunk_overlap, s.adaptive_chunking)
     ingest = IngestService(chunker, embedder, index, db)
-    registry = build_registry(vision)
+    registry = build_registry(vision, s.ocr_provider)
     retriever = HybridRetriever(embedder, index, s.rerank_candidates)
     answer = AnswerService(retriever, CrossEncoderReranker(s.rerank_model), llm, s.top_k)
 
