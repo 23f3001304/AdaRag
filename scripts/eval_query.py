@@ -68,7 +68,7 @@ def _row(name: str, base: float, rew: float, hyde: float) -> str:
 
 def _report(base: ABScores, rew: ABScores, hyde: ABScores) -> None:
     print(f"\nend-to-end  (n={base.n})")
-    print(f"{'metric':<12}{'base':>8}{'rewrite':>8}{'Δ':>7}{'hyde':>8}{'Δ':>7}")
+    print(f"{'metric':<12}{'base':>8}{'rewrite':>8}{'+/-':>7}{'hyde':>8}{'+/-':>7}")
     for k in RECALL_KS:
         print(_row(f"recall@{k}", base.recall[k], rew.recall[k], hyde.recall[k]))
     print(_row("mrr", base.mrr, rew.mrr, hyde.mrr))
