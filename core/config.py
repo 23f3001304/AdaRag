@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     ocr_provider: str = "easyocr"
     embedding_provider: str = "local"
     embedding_model: str = "BAAI/bge-m3"
+    # Custom provider adapters: comma-separated import paths; each module calls register_vision /
+    # register_llm (providers/registry.py) so a third party plugs in their own backend via config.
+    provider_plugins: str = ""
 
     # Infra
     qdrant_url: str = "http://localhost:6333"
