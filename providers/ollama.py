@@ -13,5 +13,8 @@ class OllamaLLM:
         self._client = AsyncClient(host=base_url)
 
     async def generate(self, prompt: str, *, system: str | None = None) -> str:
-        resp = await self._client.generate(model=self.model, prompt=prompt, system=system or "")
+        # think=False stops reasoning models (e.g. qwen3) from emitting <think> tokens.
+        resp = await self._client.generate(
+            model=self.model, prompt=prompt, system=system or "", think=False
+        )
         return resp["response"]
