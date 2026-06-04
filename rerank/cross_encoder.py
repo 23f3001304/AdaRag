@@ -42,7 +42,16 @@ class CrossEncoderReranker:
         scores = self._load().predict([[query, self._passage(h)] for h in hits])
         ranked = sorted(zip(hits, scores, strict=True), key=lambda hs: hs[1], reverse=True)
         return [
-            Retrieved(h.chunk_id, _sigmoid(float(s)), h.text, h.source, h.position, h.context)
+            Retrieved(
+                h.chunk_id,
+                _sigmoid(float(s)),
+                h.text,
+                h.source,
+                h.position,
+                h.context,
+                h.modality,
+                h.original_path,
+            )
             for h, s in ranked[:top_k]
         ]
 

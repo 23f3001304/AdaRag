@@ -36,7 +36,9 @@ class IngestService:
         self._enricher = enricher
         self._metadata = metadata
 
-    async def ingest(self, source: str, text: str) -> dict:
+    async def ingest(
+        self, source: str, text: str, modality: str = "text", original_path: str | None = None
+    ) -> dict:
         chunks = self._chunker.chunk(text)
         if not chunks:
             raise ValueError("document produced no chunks (empty after stripping)")
@@ -60,11 +62,13 @@ class IngestService:
                 "context": ctx,
                 "entities": m.entities,
                 "dates": m.dates,
+                "modality": modality,
+                "original_path": original_path,
             }
             points.append(self._index.point(cid, d, s, payload))
         await self._index.upsert(points)
         async with self._db.session() as session:
-            session.add(Document(id=doc_id, source=source, modality="text"))
+            session.add(Document(id=doc_id, source=source, modality=modality))
             session.add_all(
                 ChunkRow(id=cid, document_id=doc_id, position=c.index, text=c.text)
                 for cid, c in zip(ids, chunks, strict=True)

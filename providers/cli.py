@@ -11,6 +11,8 @@ import asyncio
 import json
 import os
 import shutil
+import uuid
+from pathlib import Path
 
 from core.usage import METER
 
@@ -50,6 +52,17 @@ async def _run(argv: list[str], stdin_text: str, timeout: float = DEFAULT_TIMEOU
     return out.decode("utf-8", "replace")
 
 
+def _record_usage(data: dict) -> None:
+    """Record a Claude CLI JSON result's cost/tokens/latency into the usage meter."""
+    usage = data.get("usage", {})
+    METER.record(
+        cost_usd=float(data.get("total_cost_usd") or 0.0),
+        input_tokens=int(usage.get("input_tokens") or 0),
+        output_tokens=int(usage.get("output_tokens") or 0),
+        ms=float(data.get("duration_ms") or 0.0),
+    )
+
+
 class ClaudeCodeLLM:
     """LLMProvider via the Claude Code CLI (`claude -p`); rides the CLI's own login, no key."""
 
@@ -69,13 +82,7 @@ class ClaudeCodeLLM:
             raise CLIError(f"unexpected claude output: {raw[:300]!r}") from exc
         if data.get("is_error"):
             raise CLIError(f"claude: {data.get('result', 'error')}")
-        usage = data.get("usage", {})
-        METER.record(
-            cost_usd=float(data.get("total_cost_usd") or 0.0),
-            input_tokens=int(usage.get("input_tokens") or 0),
-            output_tokens=int(usage.get("output_tokens") or 0),
-            ms=float(data.get("duration_ms") or 0.0),
-        )
+        _record_usage(data)
         return data["result"]
 
 
@@ -93,3 +100,27 @@ class GeminiCLILLM:
         if self.model:
             argv += ["-m", self.model]
         return (await _run(argv, text)).strip()
+
+
+class ClaudeCliVision:
+    """Vision via the Claude CLI: writes the image to a temp file it reads with an @reference."""
+
+    def __init__(self, model: str = "", binary: str = "claude") -> None:
+        self.model = model
+        self._binary = binary
+
+    async def describe(self, image: bytes, prompt: str) -> str:
+        tmp = Path("data") / f"_vis_{uuid.uuid4().hex}.png"
+        tmp.parent.mkdir(parents=True, exist_ok=True)
+        tmp.write_bytes(image)
+        try:
+            argv = [self._binary, "-p", "--output-format", "json"]
+            if self.model:
+                argv += ["--model", self.model]
+            data = json.loads(await _run(argv, f"{prompt}\n\n@{tmp.as_posix()}"))
+            if data.get("is_error"):
+                raise CLIError(f"claude vision: {data.get('result', 'error')}")
+            _record_usage(data)
+            return data["result"]
+        finally:
+            tmp.unlink(missing_ok=True)

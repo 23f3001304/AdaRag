@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from core.interfaces import VisionProvider
 from ingestion.base import Preprocessor, ProcessedDoc
+from ingestion.image import ImagePreprocessor
 from ingestion.pdf import PdfPreprocessor
 from ingestion.text import TextPreprocessor
 
@@ -16,11 +18,14 @@ class PreprocessorRegistry:
         self._fallback = fallback
         self._by_ext = {ext: pp for pp in preprocessors for ext in pp.extensions}
 
-    def preprocess(self, path: Path) -> ProcessedDoc:
-        return self._by_ext.get(path.suffix.lower(), self._fallback).process(path)
+    async def preprocess(self, path: Path) -> ProcessedDoc:
+        return await self._by_ext.get(path.suffix.lower(), self._fallback).process(path)
 
 
-def build_registry() -> PreprocessorRegistry:
-    """Default registry: text + PDF (more modalities added per later build step)."""
+def build_registry(vision: VisionProvider | None = None) -> PreprocessorRegistry:
+    """Default registry: text + PDF, plus image captioning when a vision provider is supplied."""
     text = TextPreprocessor()
-    return PreprocessorRegistry([text, PdfPreprocessor()], fallback=text)
+    preprocessors: list[Preprocessor] = [text, PdfPreprocessor()]
+    if vision is not None:
+        preprocessors.append(ImagePreprocessor(vision))
+    return PreprocessorRegistry(preprocessors, fallback=text)

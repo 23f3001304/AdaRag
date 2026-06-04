@@ -12,5 +12,5 @@ class TextPreprocessor:
 
     extensions = (".txt", ".md")
 
-    def process(self, path: Path) -> ProcessedDoc:
+    async def process(self, path: Path) -> ProcessedDoc:
         return ProcessedDoc(path.name, "text", path.read_text(encoding="utf-8"), str(path))

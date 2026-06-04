@@ -12,7 +12,7 @@ class PdfPreprocessor:
 
     extensions = (".pdf",)
 
-    def process(self, path: Path) -> ProcessedDoc:
+    async def process(self, path: Path) -> ProcessedDoc:
         from pypdf import PdfReader  # deferred: only needed when a PDF is ingested
 
         reader = PdfReader(str(path))

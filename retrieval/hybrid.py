@@ -23,6 +23,8 @@ class Retrieved:
     source: str
     position: int
     context: str = ""  # situating context (enrichment); scored at rerank, never displayed/cited
+    modality: str = "text"  # text/pdf/image/audio/video — the source's modality
+    original_path: str | None = None  # preserved original (image/audio/...) for the answer
 
 
 class HybridRetriever:
@@ -46,6 +48,8 @@ class HybridRetriever:
                 source=p.payload.get("source", ""),
                 position=p.payload.get("position", -1),
                 context=p.payload.get("context", ""),
+                modality=p.payload.get("modality", "text"),
+                original_path=p.payload.get("original_path"),
             )
             for p in points
         ]

@@ -7,7 +7,7 @@ Implementations are imported lazily so callers only pay for the provider they ac
 from __future__ import annotations
 
 from core.config import Settings
-from core.interfaces import EmbeddingProvider, LLMProvider
+from core.interfaces import EmbeddingProvider, LLMProvider, VisionProvider
 
 
 class ProviderFactory:
@@ -52,3 +52,10 @@ class ProviderFactory:
 
             return BGEM3Embeddings(self._s.embedding_model)
         raise ValueError(f"Unsupported embedding_provider: {self._s.embedding_provider!r}")
+
+    def vision(self) -> VisionProvider:
+        if self._s.vision_provider == "claude-cli":
+            from providers.cli import ClaudeCliVision
+
+            return ClaudeCliVision(self._s.vision_model, self._s.claude_cli_path)
+        raise ValueError(f"Unsupported vision_provider: {self._s.vision_provider!r}")
