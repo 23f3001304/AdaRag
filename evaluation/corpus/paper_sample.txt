@@ -1,0 +1,10 @@
+# Reranking in AdaRag
+
+## Why a second stage
+A first-stage retriever compares precomputed vectors and never reads a query and a passage together, so it is fast but coarse. A reranker spends extra compute to recover precision on the short list it is given.
+
+## How the cross-encoder works
+The reranker feeds the query and one candidate passage through a single transformer at once, letting every query token attend to every passage token, and emits one relevance score for the pair.
+
+## The latency cost
+Scoring twenty candidates means twenty transformer passes, so the reranker runs over a short candidate list rather than the whole collection, and the pool size trades recall against speed.

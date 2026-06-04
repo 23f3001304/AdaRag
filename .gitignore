@@ -9,10 +9,13 @@ __pycache__/
 # uv / virtualenv  (uv.lock IS committed — do not ignore it)
 .venv/
 
-# Env / secrets
+# Env / secrets (.env.example not tracked either, per project preference)
 .env
 .env.*
-!.env.example
+
+# Design doc + its heavy corpus snapshot (kept local, not committed)
+DESIGN.md
+evaluation/corpus/design.txt
 
 # Data, uploads, and caches
 /data/
@@ -38,5 +41,5 @@ Thumbs.db
 .idea/
 .vscode/
 
-# Claude Code (local, machine-specific hook paths)
-.claude/settings.local.json
+# Claude Code (local, machine-specific)
+.claude/
