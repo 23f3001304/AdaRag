@@ -1,6 +1,6 @@
 """Hybrid retrieval: a retriever that embeds the query and RRF-fuses dense + sparse hits.
 
-A cross-encoder reranker reorders these results in step 1.3.
+It returns a candidate pool; the cross-encoder reranker (1.3) reorders and trims it.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from index.qdrant_hybrid import QdrantIndex
 
 @dataclass(frozen=True)
 class Retrieved:
-    """A retrieved chunk with its fused relevance score and provenance."""
+    """A retrieved chunk with its relevance score and provenance."""
 
     chunk_id: str
     score: float
@@ -23,16 +23,16 @@ class Retrieved:
 
 
 class HybridRetriever:
-    """Embeds the query (dense + sparse) and returns the RRF-fused top-k chunks."""
+    """Embeds the query (dense + sparse) and returns up to ``limit`` RRF-fused candidates."""
 
-    def __init__(self, embedder: EmbeddingProvider, index: QdrantIndex, top_k: int) -> None:
+    def __init__(self, embedder: EmbeddingProvider, index: QdrantIndex, limit: int) -> None:
         self._embedder = embedder
         self._index = index
-        self._top_k = top_k
+        self._limit = limit
 
     async def retrieve(self, query: str) -> list[Retrieved]:
         dense, sparse = await self._embedder.embed_hybrid([query])
-        points = await self._index.search(dense[0], sparse[0], self._top_k)
+        points = await self._index.search(dense[0], sparse[0], self._limit)
         return [
             Retrieved(
                 chunk_id=str(p.id),

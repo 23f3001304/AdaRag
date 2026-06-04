@@ -10,6 +10,7 @@ from core.interfaces import EmbeddingProvider, LLMProvider
 from core.models import Chunk as ChunkRow
 from core.models import Document
 from index.qdrant_hybrid import QdrantIndex
+from rerank.base import Reranker
 from retrieval.hybrid import HybridRetriever
 
 
@@ -61,14 +62,19 @@ Answer:"""
 
 
 class AnswerService:
-    """Retrieve the top-k chunks and generate a cited answer."""
+    """Retrieve candidates, rerank them, and generate a cited answer from the top_k."""
 
-    def __init__(self, retriever: HybridRetriever, llm: LLMProvider) -> None:
+    def __init__(
+        self, retriever: HybridRetriever, reranker: Reranker, llm: LLMProvider, top_k: int
+    ) -> None:
         self._retriever = retriever
+        self._reranker = reranker
         self._llm = llm
+        self._top_k = top_k
 
     async def answer(self, query: str) -> dict:
-        hits = await self._retriever.retrieve(query)
+        candidates = await self._retriever.retrieve(query)
+        hits = await self._reranker.rerank(query, candidates, self._top_k)
         if not hits:
             return {"answer": "No documents have been ingested yet.", "citations": []}
         context = "\n\n".join(f"[{i + 1}] ({h.source}) {h.text}" for i, h in enumerate(hits))

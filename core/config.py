@@ -34,6 +34,8 @@ class Settings(BaseSettings):
 
     # Retrieval / chunking
     top_k: int = 5
+    rerank_candidates: int = 20
+    rerank_model: str = "BAAI/bge-reranker-v2-m3"
     chunk_size: int = 512
     chunk_overlap: int = 64
 

@@ -16,6 +16,7 @@ from core.pipeline import AnswerService, IngestService
 from index.qdrant_client import create_qdrant
 from index.qdrant_hybrid import QdrantIndex
 from providers.factory import ProviderFactory
+from rerank.cross_encoder import CrossEncoderReranker
 from retrieval.hybrid import HybridRetriever
 
 
@@ -29,13 +30,14 @@ async def lifespan(app: FastAPI):
     qdrant = create_qdrant(settings.qdrant_url)
     index = QdrantIndex(qdrant, settings.qdrant_collection)
     chunker = NaiveChunker(settings.chunk_size, settings.chunk_overlap)
-    retriever = HybridRetriever(embedder, index, settings.top_k)
+    retriever = HybridRetriever(embedder, index, settings.rerank_candidates)
+    reranker = CrossEncoderReranker(settings.rerank_model)
 
     await db.create_all()
     app.state.db = db
     app.state.qdrant = qdrant
     app.state.ingest = IngestService(chunker, embedder, index, db)
-    app.state.answer = AnswerService(retriever, providers.llm())
+    app.state.answer = AnswerService(retriever, reranker, providers.llm(), settings.top_k)
     try:
         yield
     finally:
