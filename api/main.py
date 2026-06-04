@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from api.health import router as health_router
 from api.ingest import router as ingest_router
 from api.query import router as query_router
-from chunking.naive import NaiveChunker
+from chunking.registry import build_chunker
 from core.config import get_settings
 from core.db import Database
 from core.pipeline import AnswerService, IngestService
@@ -31,7 +31,7 @@ async def lifespan(app: FastAPI):
     db = Database(settings.database_url)
     qdrant = create_qdrant(settings.qdrant_url)
     index = QdrantIndex(qdrant, settings.qdrant_collection)
-    chunker = NaiveChunker(settings.chunk_size, settings.chunk_overlap)
+    chunker = build_chunker(settings.chunk_size, settings.chunk_overlap, settings.adaptive_chunking)
     retriever = HybridRetriever(embedder, index, settings.rerank_candidates)
     reranker = CrossEncoderReranker(settings.rerank_model)
     llm = providers.llm()

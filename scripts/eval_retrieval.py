@@ -12,7 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from chunking.naive import NaiveChunker  # noqa: E402
+from chunking.registry import build_chunker  # noqa: E402
 from core.config import Settings  # noqa: E402
 from core.db import Database  # noqa: E402
 from core.pipeline import AnswerService, IngestService  # noqa: E402
@@ -42,7 +42,7 @@ async def main() -> None:
     await reset_corpus(qdrant, db, s.qdrant_collection)
 
     enricher = ContextualEnricher(llm) if s.enrich_context else None
-    chunker = NaiveChunker(s.chunk_size, s.chunk_overlap)
+    chunker = build_chunker(s.chunk_size, s.chunk_overlap, s.adaptive_chunking)
     ingest = IngestService(chunker, embedder, index, db, enricher)
     for doc in sorted((ROOT / "evaluation" / "corpus").glob("*.txt")):
         await ingest.ingest(doc.name, doc.read_text(encoding="utf-8"))

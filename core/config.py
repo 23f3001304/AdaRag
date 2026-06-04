@@ -48,6 +48,9 @@ class Settings(BaseSettings):
     # query-layer metadata filters (entities/dates land in the payload). See evaluation/BASELINE.md.
     enrich_metadata: bool = False
 
+    # Adaptive chunking (Phase 3): profile each doc -> code-AST / paper-section / notes; else naive.
+    adaptive_chunking: bool = True
+
     # Cost / tuning
     cost_budget: str = "balanced"
 
