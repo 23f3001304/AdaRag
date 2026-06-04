@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from core.interfaces import VisionProvider
+from ingestion.audio import AudioPreprocessor
 from ingestion.base import Preprocessor, ProcessedDoc
 from ingestion.image import ImagePreprocessor
 from ingestion.pdf import PdfPreprocessor
@@ -25,7 +26,7 @@ class PreprocessorRegistry:
 def build_registry(vision: VisionProvider | None = None) -> PreprocessorRegistry:
     """Default registry: text + PDF, plus image captioning when a vision provider is supplied."""
     text = TextPreprocessor()
-    preprocessors: list[Preprocessor] = [text, PdfPreprocessor()]
+    preprocessors: list[Preprocessor] = [text, PdfPreprocessor(), AudioPreprocessor()]
     if vision is not None:
         preprocessors.append(ImagePreprocessor(vision))
     return PreprocessorRegistry(preprocessors, fallback=text)
