@@ -1,6 +1,6 @@
-"""Dense retrieval: embed the query and fetch the nearest chunks from Qdrant.
+"""Hybrid retrieval: embed the query (dense + sparse) and fuse candidates via RRF.
 
-Phase 1 adds sparse fusion (RRF) and a cross-encoder reranker on top of this.
+A cross-encoder reranker reorders these results in step 1.3.
 """
 
 from __future__ import annotations
@@ -10,12 +10,12 @@ from dataclasses import dataclass
 from qdrant_client import AsyncQdrantClient
 
 from core.interfaces import EmbeddingProvider
-from index.qdrant_hybrid import search_dense
+from index.qdrant_hybrid import hybrid_search
 
 
 @dataclass(frozen=True)
 class Retrieved:
-    """A retrieved chunk with its relevance score and provenance."""
+    """A retrieved chunk with its fused relevance score and provenance."""
 
     chunk_id: str
     score: float
@@ -32,9 +32,9 @@ async def retrieve(
     collection: str,
     top_k: int,
 ) -> list[Retrieved]:
-    """Embed the query and return the top-k nearest chunks (dense only for now)."""
-    vector = (await embedder.embed([query]))[0]
-    points = await search_dense(qdrant, collection, vector, top_k)
+    """Embed the query (dense + sparse) and return the RRF-fused top-k chunks."""
+    dense, sparse = await embedder.embed_hybrid([query])
+    points = await hybrid_search(qdrant, collection, dense[0], sparse[0], top_k)
     return [
         Retrieved(
             chunk_id=str(p.id),

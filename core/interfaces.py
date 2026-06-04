@@ -11,12 +11,18 @@ from typing import Protocol, runtime_checkable
 
 @runtime_checkable
 class EmbeddingProvider(Protocol):
-    """Turns text into dense vectors (sparse vectors arrive in Phase 1)."""
+    """Turns text into dense vectors, and (for hybrid retrieval) sparse lexical vectors."""
 
     dim: int
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         """Embed a batch of texts into dense vectors of length ``dim``."""
+        ...
+
+    async def embed_hybrid(
+        self, texts: list[str]
+    ) -> tuple[list[list[float]], list[dict[int, float]]]:
+        """Embed a batch into dense vectors + sparse {token_id: weight} maps, in one pass."""
         ...
 
 

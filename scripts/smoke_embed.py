@@ -21,6 +21,8 @@ async def main() -> None:
     emb = build_embeddings(Settings())
     vecs = await emb.embed(["hello world", "adaptive multimodal rag"])
     print(f"device={emb.device} n={len(vecs)} dim={len(vecs[0])} sample={[round(x, 4) for x in vecs[0][:4]]}")
+    dense, sparse = await emb.embed_hybrid(["adaptive multimodal retrieval"])
+    print(f"hybrid: dense_dim={len(dense[0])} sparse_terms={len(sparse[0])} sample={dict(list(sparse[0].items())[:4])}")
 
 
 if __name__ == "__main__":

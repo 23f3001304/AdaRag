@@ -1,25 +1,35 @@
-"""Qdrant collection management + dense upsert/search (named-vector ready for Phase 1 sparse)."""
+"""Qdrant collection management + hybrid (dense + sparse) upsert and RRF search."""
 
 from __future__ import annotations
 
 from qdrant_client import AsyncQdrantClient, models
 
-DENSE = "dense"  # named vector; a "sparse" vector joins it in Phase 1 (hybrid)
+DENSE = "dense"
+SPARSE = "sparse"
 
 
 async def ensure_collection(client: AsyncQdrantClient, name: str, dim: int) -> None:
-    """Create the collection with a named dense vector if it doesn't already exist."""
+    """Create the collection with named dense + sparse vectors if it doesn't already exist."""
     if await client.collection_exists(name):
         return
     await client.create_collection(
         collection_name=name,
         vectors_config={DENSE: models.VectorParams(size=dim, distance=models.Distance.COSINE)},
+        sparse_vectors_config={SPARSE: models.SparseVectorParams()},
     )
 
 
-def make_point(point_id: str, vector: list[float], payload: dict) -> models.PointStruct:
-    """Build a Qdrant point under the named dense vector."""
-    return models.PointStruct(id=point_id, vector={DENSE: vector}, payload=payload)
+def _sparse(sparse: dict[int, float]) -> models.SparseVector:
+    return models.SparseVector(indices=list(sparse.keys()), values=list(sparse.values()))
+
+
+def make_point(
+    point_id: str, dense: list[float], sparse: dict[int, float], payload: dict
+) -> models.PointStruct:
+    """Build a Qdrant point carrying both the dense and sparse vectors."""
+    return models.PointStruct(
+        id=point_id, vector={DENSE: dense, SPARSE: _sparse(sparse)}, payload=payload
+    )
 
 
 async def upsert_chunks(client: AsyncQdrantClient, name: str, points: list[models.PointStruct]) -> None:
@@ -28,9 +38,18 @@ async def upsert_chunks(client: AsyncQdrantClient, name: str, points: list[model
         await client.upsert(collection_name=name, points=points)
 
 
-async def search_dense(client: AsyncQdrantClient, name: str, vector: list[float], top_k: int):
-    """Dense nearest-neighbour search; returns scored points with their payloads."""
+async def hybrid_search(
+    client: AsyncQdrantClient, name: str, dense: list[float], sparse: dict[int, float], top_k: int
+):
+    """Fetch dense + sparse candidates and fuse them server-side with Reciprocal Rank Fusion."""
     result = await client.query_points(
-        collection_name=name, query=vector, using=DENSE, limit=top_k, with_payload=True
+        collection_name=name,
+        prefetch=[
+            models.Prefetch(query=dense, using=DENSE, limit=top_k),
+            models.Prefetch(query=_sparse(sparse), using=SPARSE, limit=top_k),
+        ],
+        query=models.FusionQuery(fusion=models.Fusion.RRF),
+        limit=top_k,
+        with_payload=True,
     )
     return result.points

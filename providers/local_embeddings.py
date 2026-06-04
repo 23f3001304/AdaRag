@@ -39,3 +39,17 @@ class BGEM3Embeddings:
         if not texts:
             return []
         return await asyncio.to_thread(self._encode, texts)
+
+    def _encode_hybrid(self, texts: list[str]) -> tuple[list[list[float]], list[dict[int, float]]]:
+        out = self._load().encode(texts, return_dense=True, return_sparse=True)
+        dense = [vec.tolist() for vec in out["dense_vecs"]]
+        sparse = [{int(tok): float(w) for tok, w in lw.items()} for lw in out["lexical_weights"]]
+        return dense, sparse
+
+    async def embed_hybrid(
+        self, texts: list[str]
+    ) -> tuple[list[list[float]], list[dict[int, float]]]:
+        """Embed texts into dense + sparse (lexical) vectors in a single bge-m3 pass."""
+        if not texts:
+            return [], []
+        return await asyncio.to_thread(self._encode_hybrid, texts)

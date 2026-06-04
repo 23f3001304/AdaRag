@@ -13,7 +13,7 @@ from core.interfaces import EmbeddingProvider, LLMProvider
 from core.models import Chunk as ChunkRow
 from core.models import Document
 from index.qdrant_hybrid import ensure_collection, make_point, upsert_chunks
-from retrieval.dense import retrieve
+from retrieval.hybrid import retrieve
 
 
 async def ingest_text(
@@ -30,14 +30,14 @@ async def ingest_text(
     if not chunks:
         raise ValueError("document produced no chunks (empty after stripping)")
 
-    vectors = await embedder.embed([c.text for c in chunks])
+    dense, sparse = await embedder.embed_hybrid([c.text for c in chunks])
 
     await ensure_collection(qdrant, settings.qdrant_collection, embedder.dim)
     doc_id = str(uuid.uuid4())
     chunk_ids = [str(uuid.uuid4()) for _ in chunks]
     points = [
-        make_point(cid, vec, {"doc_id": doc_id, "source": source, "position": c.index, "text": c.text})
-        for cid, vec, c in zip(chunk_ids, vectors, chunks)
+        make_point(cid, d, s, {"doc_id": doc_id, "source": source, "position": c.index, "text": c.text})
+        for cid, d, s, c in zip(chunk_ids, dense, sparse, chunks)
     ]
     await upsert_chunks(qdrant, settings.qdrant_collection, points)
 
