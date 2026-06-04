@@ -116,12 +116,26 @@ def _ollama_vision(s: Settings) -> VisionProvider:
     return OllamaVision(s.ollama_base_url, s.vision_model)
 
 
+def _bridge_llm(s: Settings) -> LLMProvider:
+    from providers.http_bridge import HttpBridgeLLM
+
+    return HttpBridgeLLM(s.cli_bridge_url, s.llm_model)
+
+
+def _bridge_vision(s: Settings) -> VisionProvider:
+    from providers.http_bridge import HttpBridgeVision
+
+    return HttpBridgeVision(s.cli_bridge_url, s.vision_model)
+
+
 register_llm("anthropic", _anthropic_llm)
 register_llm("openai", _openai_llm)
 register_llm("openrouter", _openrouter_llm)
 register_llm("ollama", _ollama_llm)
 register_llm("claude-cli", _claude_cli_llm)
 register_llm("gemini-cli", _gemini_cli_llm)
+register_llm("cli-bridge", _bridge_llm)
 register_vision("claude-cli", _claude_cli_vision)
 register_vision("gemini-cli", _gemini_cli_vision)
 register_vision("ollama", _ollama_vision)
+register_vision("cli-bridge", _bridge_vision)

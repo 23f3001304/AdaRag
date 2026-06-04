@@ -48,6 +48,16 @@ services:
       QDRANT_URL: http://qdrant:6333
       QDRANT_COLLECTION: adarag_chunks
       DATABASE_URL: postgresql+asyncpg://adarag:adarag@postgres:5432/adarag
+      # The container can't run the host's CLI shims, so it reaches them over the CLI bridge.
+      # Start it on the host first:
+      #   uv run uvicorn scripts.cli_bridge:app --host 0.0.0.0 --port 8088
+      # (Switch these to ollama + OLLAMA_BASE_URL if you'd rather stay fully in-container.)
+      LLM_PROVIDER: cli-bridge
+      VISION_PROVIDER: cli-bridge
+      CLI_BRIDGE_URL: http://host.docker.internal:8088
+    # Lets the container resolve the host (for the bridge) on Linux too; Docker Desktop adds it.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "8000:8000"
     # GPU passthrough (Docker Desktop + WSL2): lets the in-container bge-m3 embedder use the 5080.

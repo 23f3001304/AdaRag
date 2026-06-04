@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     # CLI backends use the tool's own auth (no key); override the path if not on PATH.
     claude_cli_path: str = "claude"
     gemini_cli_path: str = "gemini"
+    # cli-bridge provider: a Dockerized API reaches the host CLIs via this HTTP bridge
+    # (scripts/cli_bridge.py running on the host).
+    cli_bridge_url: str = "http://host.docker.internal:8088"
     llm_provider: str = "ollama"
     llm_model: str = "qwen3:8b-q8_0"
     # vision_provider in {claude-cli, gemini-cli, ollama}. Ollama needs a vision model pulled
