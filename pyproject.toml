@@ -26,6 +26,7 @@ dependencies = [
     "torch>=2.8",  # cu128 (Blackwell) index tops out at 2.11.x; 2.12 isn't published for cu128 yet
     "tree-sitter>=0.25.2",
     "tree-sitter-language-pack>=1.8.1",
+    "pypdf>=6.12.2",
 ]
 
 [dependency-groups]
