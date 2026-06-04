@@ -70,18 +70,24 @@ async def _context_for(db: Database, citations: list[dict]) -> str:
     return "\n\n".join(r.text for r in rows)
 
 
-async def _judge_arm(
-    questions: list[QAPair], answer: AnswerService, judge: AnswerJudge, db: Database
-) -> tuple[float, float]:
-    faith = rel = 0.0
-    for q in questions:
+async def _score_one(
+    q: QAPair, answer: AnswerService, judge: AnswerJudge, db: Database
+) -> tuple[float, float] | None:
+    """Answer one question and judge it; None if any call fails (e.g. a CLI timeout)."""
+    try:
         result = await answer.answer(q.question)
         context = await _context_for(db, result["citations"])
         scores = await judge.score(q.question, context, result["answer"])
-        faith += scores.faithfulness
-        rel += scores.answer_relevance
-    n = len(questions) or 1
-    return faith / n, rel / n
+    except Exception:
+        return None
+    return scores.faithfulness, scores.answer_relevance
+
+
+async def _judge_arm(
+    questions: list[QAPair], answer: AnswerService, judge: AnswerJudge, db: Database
+) -> list[tuple[float, float] | None]:
+    """Per-question (faithfulness, relevance), or None where a call failed."""
+    return [await _score_one(q, answer, judge, db) for q in questions]
 
 
 async def main() -> None:
@@ -105,13 +111,20 @@ async def main() -> None:
 
     await reset_corpus(qdrant, db, s.qdrant_collection)
     await _ingest_all(IngestService(naive, embedder, index, db), docs)
-    nf, nr = await _judge_arm(questions, answer, judge, db)
+    naive_scores = await _judge_arm(questions, answer, judge, db)
 
     await reset_corpus(qdrant, db, s.qdrant_collection)
     await _ingest_all(IngestService(adaptive, embedder, index, db), docs)
-    af, ar = await _judge_arm(questions, answer, judge, db)
+    adaptive_scores = await _judge_arm(questions, answer, judge, db)
 
-    print(f"\nanswer quality  (n={len(questions)})")
+    pairs = [(n, a) for n, a in zip(naive_scores, adaptive_scores, strict=True) if n and a]
+    m = len(pairs) or 1
+    nf = sum(p[0][0] for p in pairs) / m
+    nr = sum(p[0][1] for p in pairs) / m
+    af = sum(p[1][0] for p in pairs) / m
+    ar = sum(p[1][1] for p in pairs) / m
+
+    print(f"\nanswer quality  (n={len(pairs)} of {len(questions)})")
     print(f"{'metric':<14}{'naive':>8}{'adaptive':>10}{'delta':>9}")
     print(f"{'faithfulness':<14}{nf:>8.3f}{af:>10.3f}{af - nf:>+9.3f}")
     print(f"{'relevance':<14}{nr:>8.3f}{ar:>10.3f}{ar - nr:>+9.3f}")
