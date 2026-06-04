@@ -1,7 +1,7 @@
-"""Provider factory: builds the configured providers from Settings (BYOK selection).
+"""Provider factory: builds the configured LLM and embedding providers from Settings (BYOK).
 
-Implementations are imported lazily so callers that only need one provider (or none)
-don't pay for the others' dependencies — notably the local embedder's torch import.
+Implementations are imported lazily so callers only pay for the provider they actually use
+(notably the local embedder's torch import).
 """
 
 from __future__ import annotations
@@ -10,44 +10,45 @@ from core.config import Settings
 from core.interfaces import EmbeddingProvider, LLMProvider
 
 
-def build_llm(settings: Settings) -> LLMProvider:
-    """Construct the LLM provider named by settings.llm_provider."""
-    provider = settings.llm_provider
-    if provider == "anthropic":
-        from providers.anthropic import AnthropicLLM
+class ProviderFactory:
+    """Builds providers per the BYOK configuration."""
 
-        return AnthropicLLM(settings.anthropic_api_key, settings.llm_model)
-    if provider == "openai":
-        from providers.openai import OpenAILLM
+    def __init__(self, settings: Settings) -> None:
+        self._s = settings
 
-        return OpenAILLM(settings.openai_api_key, settings.llm_model)
-    if provider == "ollama":
-        from providers.ollama import OllamaLLM
+    def llm(self) -> LLMProvider:
+        s = self._s
+        if s.llm_provider == "anthropic":
+            from providers.anthropic import AnthropicLLM
 
-        return OllamaLLM(settings.ollama_base_url, settings.llm_model)
-    if provider == "openrouter":
-        from providers.openai import OpenAILLM  # OpenRouter speaks the OpenAI API
+            return AnthropicLLM(s.anthropic_api_key, s.llm_model)
+        if s.llm_provider == "openai":
+            from providers.openai import OpenAILLM
 
-        return OpenAILLM(
-            settings.openrouter_api_key,
-            settings.llm_model,
-            base_url="https://openrouter.ai/api/v1",
-        )
-    if provider == "claude-cli":
-        from providers.cli import ClaudeCodeLLM  # shells out to the Claude Code CLI
+            return OpenAILLM(s.openai_api_key, s.llm_model)
+        if s.llm_provider == "ollama":
+            from providers.ollama import OllamaLLM
 
-        return ClaudeCodeLLM(settings.llm_model, settings.claude_cli_path)
-    if provider == "gemini-cli":
-        from providers.cli import GeminiCLILLM  # shells out to the Gemini CLI
+            return OllamaLLM(s.ollama_base_url, s.llm_model)
+        if s.llm_provider == "openrouter":
+            from providers.openai import OpenAILLM
 
-        return GeminiCLILLM(settings.llm_model, settings.gemini_cli_path)
-    raise ValueError(f"Unknown llm_provider: {provider!r}")
+            return OpenAILLM(
+                s.openrouter_api_key, s.llm_model, base_url="https://openrouter.ai/api/v1"
+            )
+        if s.llm_provider == "claude-cli":
+            from providers.cli import ClaudeCodeLLM
 
+            return ClaudeCodeLLM(s.llm_model, s.claude_cli_path)
+        if s.llm_provider == "gemini-cli":
+            from providers.cli import GeminiCLILLM
 
-def build_embeddings(settings: Settings) -> EmbeddingProvider:
-    """Construct the embedding provider named by settings.embedding_provider."""
-    if settings.embedding_provider == "local":
-        from providers.local_embeddings import BGEM3Embeddings  # lazy: imports torch
+            return GeminiCLILLM(s.llm_model, s.gemini_cli_path)
+        raise ValueError(f"Unknown llm_provider: {s.llm_provider!r}")
 
-        return BGEM3Embeddings(settings.embedding_model)
-    raise ValueError(f"Unsupported embedding_provider: {settings.embedding_provider!r} (only 'local')")
+    def embeddings(self) -> EmbeddingProvider:
+        if self._s.embedding_provider == "local":
+            from providers.local_embeddings import BGEM3Embeddings
+
+            return BGEM3Embeddings(self._s.embedding_model)
+        raise ValueError(f"Unsupported embedding_provider: {self._s.embedding_provider!r}")

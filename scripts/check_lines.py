@@ -18,15 +18,27 @@ from dataclasses import dataclass
 from pathlib import Path
 
 # --- policy (keep in sync with CONVENTIONS.md) -------------------------------
-WARN = 250          # refactor soon
-HARD = 300          # split before moving on
-TEST_HARD = 400     # tests get more room
+WARN = 250  # refactor soon
+HARD = 300  # split before moving on
+TEST_HARD = 400  # tests get more room
 
 SOURCE_EXTS = {".py", ".ts", ".tsx", ".js", ".jsx", ".vue", ".svelte"}
 SKIP_DIRS = {
-    ".git", ".venv", "__pycache__", "node_modules", ".ruff_cache", ".pytest_cache",
-    ".mypy_cache", "hf_cache", ".huggingface", "qdrant_storage", "pg_data",
-    ".next", "out", "dist", "build",
+    ".git",
+    ".venv",
+    "__pycache__",
+    "node_modules",
+    ".ruff_cache",
+    ".pytest_cache",
+    ".mypy_cache",
+    "hf_cache",
+    ".huggingface",
+    "qdrant_storage",
+    "pg_data",
+    ".next",
+    "out",
+    "dist",
+    "build",
 }
 # Files matched here are listed but never gated (auto-generated / vendored).
 EXEMPT_SUFFIXES = ("_pb2.py",)
@@ -102,7 +114,7 @@ def write_ledger(text: str) -> None:
     start, end = doc.find(LEDGER_START), doc.find(LEDGER_END)
     if start == -1 or end == -1:
         raise SystemExit("CONVENTIONS.md is missing the LEDGER markers.")
-    CONVENTIONS.write_text(doc[:start] + text + doc[end + len(LEDGER_END):], encoding="utf-8")
+    CONVENTIONS.write_text(doc[:start] + text + doc[end + len(LEDGER_END) :], encoding="utf-8")
 
 
 def main() -> int:
@@ -125,8 +137,10 @@ def main() -> int:
         for e in over:
             print(f"  OVER  {e.path}: {e.lines} lines (> {e.limit})", file=sys.stderr)
         # Exit 2 so a PostToolUse hook feeds this back to Claude as a blocking reason.
-        print(f"{len(over)} file(s) over the {HARD}-line ceiling. Split before continuing.",
-              file=sys.stderr)
+        print(
+            f"{len(over)} file(s) over the {HARD}-line ceiling. Split before continuing.",
+            file=sys.stderr,
+        )
         return 2
     tail = f" ({len(warn)} approaching)." if warn else "."
     print(f"All {len(entries)} source files within limits{tail}")

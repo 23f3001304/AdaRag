@@ -1,1 +1,1 @@
-"""Query layer: classify and route, rewrite/decompose, and fuse dense + sparse + metadata candidates."""
+"""Query layer: classify/route, rewrite/decompose, and fuse dense + sparse + metadata."""

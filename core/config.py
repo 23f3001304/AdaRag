@@ -10,9 +10,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Typed settings. Env vars (and a local .env) populate these; env wins over .env."""
 
-    model_config = SettingsConfigDict(
-        env_file=".env", env_file_encoding="utf-8", extra="ignore"
-    )
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     # Providers. llm_provider in {ollama, anthropic, openai, openrouter, claude-cli, gemini-cli}
     anthropic_api_key: str = ""

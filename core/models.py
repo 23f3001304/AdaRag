@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import datetime
 
 from sqlalchemy import ForeignKey, String, Text, func
-from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -21,7 +20,7 @@ class Document(Base):
     modality: Mapped[str] = mapped_column(String(32), default="text")
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
-    chunks: Mapped[list["Chunk"]] = relationship(
+    chunks: Mapped[list[Chunk]] = relationship(
         back_populates="document", cascade="all, delete-orphan"
     )
 
@@ -34,10 +33,4 @@ class Chunk(Base):
     position: Mapped[int] = mapped_column()
     text: Mapped[str] = mapped_column(Text)
 
-    document: Mapped["Document"] = relationship(back_populates="chunks")
-
-
-async def create_all(engine: AsyncEngine) -> None:
-    """Create tables if missing (Phase 0; Alembic migrations come once the schema settles)."""
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    document: Mapped[Document] = relationship(back_populates="chunks")

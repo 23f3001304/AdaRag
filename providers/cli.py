@@ -39,11 +39,13 @@ async def _run(argv: list[str], stdin_text: str, timeout: float = DEFAULT_TIMEOU
     )
     try:
         out, err = await asyncio.wait_for(proc.communicate(stdin_text.encode("utf-8")), timeout)
-    except asyncio.TimeoutError as exc:
+    except TimeoutError as exc:
         proc.kill()
         raise CLIError(f"{argv[0]} timed out after {timeout:.0f}s") from exc
     if proc.returncode != 0:
-        raise CLIError(f"{argv[0]} exited {proc.returncode}: {err.decode('utf-8', 'replace')[:500]}")
+        raise CLIError(
+            f"{argv[0]} exited {proc.returncode}: {err.decode('utf-8', 'replace')[:500]}"
+        )
     return out.decode("utf-8", "replace")
 
 

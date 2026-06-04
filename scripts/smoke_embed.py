@@ -14,15 +14,15 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # make repo root importable
 
 from core.config import Settings  # noqa: E402
-from providers.factory import build_embeddings  # noqa: E402
+from providers.factory import ProviderFactory  # noqa: E402
 
 
 async def main() -> None:
-    emb = build_embeddings(Settings())
+    emb = ProviderFactory(Settings()).embeddings()
     vecs = await emb.embed(["hello world", "adaptive multimodal rag"])
-    print(f"device={emb.device} n={len(vecs)} dim={len(vecs[0])} sample={[round(x, 4) for x in vecs[0][:4]]}")
+    print(f"dense: device={emb.device} n={len(vecs)} dim={len(vecs[0])}")
     dense, sparse = await emb.embed_hybrid(["adaptive multimodal retrieval"])
-    print(f"hybrid: dense_dim={len(dense[0])} sparse_terms={len(sparse[0])} sample={dict(list(sparse[0].items())[:4])}")
+    print(f"hybrid: dense_dim={len(dense[0])} sparse_terms={len(sparse[0])}")
 
 
 if __name__ == "__main__":

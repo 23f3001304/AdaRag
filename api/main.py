@@ -1,4 +1,4 @@
-"""FastAPI application: wiring, lifespan-managed clients, and routes."""
+"""FastAPI application: wiring, lifespan-managed services, and routes."""
 
 from __future__ import annotations
 
@@ -9,27 +9,38 @@ from fastapi import FastAPI
 from api.health import router as health_router
 from api.ingest import router as ingest_router
 from api.query import router as query_router
+from chunking.naive import NaiveChunker
 from core.config import get_settings
-from core.db import create_engine
-from core.models import create_all
+from core.db import Database
+from core.pipeline import AnswerService, IngestService
 from index.qdrant_client import create_qdrant
-from providers.factory import build_embeddings, build_llm
+from index.qdrant_hybrid import QdrantIndex
+from providers.factory import ProviderFactory
+from retrieval.hybrid import HybridRetriever
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Open shared clients + ensure tables on startup; dispose on shutdown."""
+    """Build the services from config, ensure tables, and dispose clients on shutdown."""
     settings = get_settings()
-    app.state.db_engine = create_engine(settings.database_url)
-    app.state.qdrant = create_qdrant(settings.qdrant_url)
-    app.state.embedder = build_embeddings(settings)
-    app.state.llm = build_llm(settings)
-    await create_all(app.state.db_engine)
+    providers = ProviderFactory(settings)
+    embedder = providers.embeddings()
+    db = Database(settings.database_url)
+    qdrant = create_qdrant(settings.qdrant_url)
+    index = QdrantIndex(qdrant, settings.qdrant_collection)
+    chunker = NaiveChunker(settings.chunk_size, settings.chunk_overlap)
+    retriever = HybridRetriever(embedder, index, settings.top_k)
+
+    await db.create_all()
+    app.state.db = db
+    app.state.qdrant = qdrant
+    app.state.ingest = IngestService(chunker, embedder, index, db)
+    app.state.answer = AnswerService(retriever, providers.llm())
     try:
         yield
     finally:
-        await app.state.db_engine.dispose()
-        await app.state.qdrant.close()
+        await db.dispose()
+        await qdrant.close()
 
 
 app = FastAPI(title="AdaRag", version="0.1.0", lifespan=lifespan)
