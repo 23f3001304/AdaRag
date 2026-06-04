@@ -104,6 +104,18 @@ async def main() -> None:
 
     corpus = sorted((ROOT / "evaluation" / "corpus").glob("*.txt"))
     docs = [(p.name, p.read_text(encoding="utf-8")) for p in corpus]
+    max_chunks = int(os.environ.get("AB_MAX_CHUNKS", "0"))
+    if max_chunks:  # cap the corpus (biggest docs first) so per-chunk enrichment stays tractable
+        docs.sort(key=lambda d: len(d[1]), reverse=True)
+        kept: list[tuple[str, str]] = []
+        total = 0
+        for doc in docs:
+            kept.append(doc)
+            total += len(chunker.chunk(doc[1]))
+            if total >= max_chunks:
+                break
+        docs = kept
+        print(f"capped to {len(docs)} docs (~{total} chunks)")
     qa = await _build_qa(QAGenerator(llm), docs, chunker, mode)
     print(f"arms: OFF={off_spec}  ON={on_spec}  queries={mode}")
 

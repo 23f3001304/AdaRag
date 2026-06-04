@@ -72,10 +72,16 @@ class IngestService:
         return {"document_id": doc_id, "chunks": len(chunks), "source": source}
 
     async def _contexts(self, chunks: list[Chunk], document: str) -> list[str]:
-        """One situating context per chunk (empty strings when enrichment is disabled)."""
+        """One situating context per chunk (empty when disabled, or when a single call fails)."""
         if self._enricher is None:
             return ["" for _ in chunks]
-        return [await self._enricher.context_for(c.text, document) for c in chunks]
+        out: list[str] = []
+        for c in chunks:
+            try:
+                out.append(await self._enricher.context_for(c.text, document))
+            except Exception:  # a flaky enrichment call shouldn't abort a whole ingest
+                out.append("")
+        return out
 
     async def _metadata_for(self, chunks: list[Chunk]) -> list[ChunkMetadata]:
         """One ChunkMetadata per chunk (empty when metadata enrichment is disabled)."""
