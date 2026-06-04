@@ -1,0 +1,5 @@
+Hybrid retrieval and reranking
+
+At query time AdaRag retrieves candidates from both the dense and the sparse vector spaces and fuses them with reciprocal rank fusion inside Qdrant. Sparse retrieval matters most for code, where exact symbol match is decisive, and for any query carrying proper nouns.
+
+The fused candidate pool is then reordered by a bge-reranker-v2-m3 cross-encoder, which scores each query-passage pair directly and is far more precise than vector similarity alone. Only the reranked top results reach the generator, which assembles them into context and returns an answer with citations back to the source chunks.

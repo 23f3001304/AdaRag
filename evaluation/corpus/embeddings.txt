@@ -1,0 +1,5 @@
+Embeddings with bge-m3
+
+AdaRag embeds text locally with bge-m3, a model that produces both a dense vector and a sparse lexical vector from a single forward pass. The dense vector captures semantic similarity, while the sparse vector behaves like a learned bag of words and excels at exact symbol and proper-noun matching.
+
+Keeping embeddings local by default means the index never depends on a paid embedding API, and re-embedding stays cheap during the optimizer's tuning sweeps. The embedder runs on the GPU when one is available and falls back to CPU otherwise. Its 1024-dimensional dense output is compared with cosine distance.

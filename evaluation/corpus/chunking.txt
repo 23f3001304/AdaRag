@@ -1,0 +1,5 @@
+Adaptive chunking strategies
+
+Fixed-size chunking flattens every document into the same shape and loses what made each one retrievable. AdaRag instead selects a chunking strategy from the file's profile. Research papers are split section-aware, keeping equations and tables whole, with an optional hierarchical summary tree for very long documents.
+
+Source code is parsed with tree-sitter and chunked by abstract syntax tree node, so functions and classes stay intact along with their signatures and docstrings. Notes and transcripts are segmented by topic into smaller pieces. Chunk size and overlap are tunable parameters rather than constants, set per profile and revalidated against the evaluation set.

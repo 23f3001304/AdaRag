@@ -1,0 +1,5 @@
+Profiling and routing in AdaRag
+
+AdaRag does not assume a single document type. Before any chunking happens, a profiler inspects each file and emits a profile: its modality, and for text its document type (paper, code, notes, or generic), language, and structure density, plus flags for equations, tables, and code blocks.
+
+Cheap heuristics and a small classifier handle the common cases, and a single LLM call resolves the genuinely ambiguous files. The resulting profile drives every downstream choice: which preprocessor runs, which chunking strategy applies, and how aggressively captions or transcripts are produced. Routing on the profile is the differentiator that turns a mixed corpus into a feature rather than a liability.

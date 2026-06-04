@@ -1,0 +1,5 @@
+Evaluation and self-tuning
+
+A golden evaluation set anchors AdaRag's quality. Question-answer pairs are generated from the corpus, each tagged with the chunk that answers it, alongside a small hand-labeled set that keeps the numbers honest. Retrieval is scored with recall@k, mean reciprocal rank, and nDCG; generation is scored for faithfulness to the retrieved context and relevance to the question.
+
+An Optuna study then sweeps the tunable parameters — chunk size, overlap, top-k, the dense-to-sparse weight, and whether the reranker is on — against a multi-objective function that balances answer quality against token cost and latency. The pipeline adopts the configuration on the Pareto front that best fits the chosen budget.

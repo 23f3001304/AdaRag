@@ -48,7 +48,8 @@ async def main() -> None:
         await session.commit()
 
     ingest = IngestService(NaiveChunker(s.chunk_size, s.chunk_overlap), embedder, index, db)
-    await ingest.ingest("sample.txt", (ROOT / "data" / "sample.txt").read_text(encoding="utf-8"))
+    for doc in sorted((ROOT / "evaluation" / "corpus").glob("*.txt")):
+        await ingest.ingest(doc.name, doc.read_text(encoding="utf-8"))
     n = await EvalSetBuilder(QAGenerator(llm), db).build()
 
     retriever = HybridRetriever(embedder, index, s.rerank_candidates)
