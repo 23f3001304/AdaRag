@@ -57,3 +57,28 @@ async def score_reranked(
         ranked = await reranker.rerank(qa.question, hits, len(hits))
         results.append(([gold_key(h.source, h.position) for h in ranked], qa.chunk_id))
     return _scores(results)
+
+
+def _norm(text: str) -> str:
+    return " ".join(text.split()).lower()
+
+
+async def score_containment(
+    retriever: HybridRetriever, qa_pairs: list[QAPair], reranker: Reranker | None = None
+) -> ABScores:
+    """Chunker-agnostic: score by whether a top-k chunk *contains* the verbatim answer span.
+
+    Chunk identity is meaningless across chunkers, so the gold is the answer text itself: a query
+    "hits" at the rank of the first retrieved chunk that contains the span.
+    """
+    results: list[tuple[list[str], str]] = []
+    for qa in qa_pairs:
+        span = _norm(qa.answer)
+        hits = await retriever.retrieve(qa.question)
+        if reranker is not None:
+            hits = await reranker.rerank(qa.question, hits, len(hits))
+        marks = [
+            "HIT" if span and span in _norm(h.text) else f"MISS{i}" for i, h in enumerate(hits)
+        ]
+        results.append((marks, "HIT"))
+    return _scores(results)

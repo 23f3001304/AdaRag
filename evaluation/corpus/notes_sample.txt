@@ -1,0 +1,16 @@
+RAG tuning notes - sprint review
+
+Retrieval
+- hybrid dense plus sparse beats dense alone on code and proper-noun queries
+- reciprocal rank fusion is parameter-free, so it needs no per-corpus weight
+- a candidate pool of twenty before reranking is a solid default
+
+Chunking
+- naive fixed-size windows split a section mid-thought and bury the answer
+- paper-section chunking keeps a heading attached to the body beneath it
+- code should be split by function or class, never by character count
+
+Open questions
+- does contextual enrichment still help once the corpus passes a thousand chunks
+- what latency budget can the cross-encoder afford when reranking the top twenty
+- should the reranker also see the situating context, which it now does

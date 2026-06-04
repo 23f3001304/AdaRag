@@ -1,0 +1,42 @@
+"""A tiny in-memory hybrid retriever sketch (illustrative, not the real pipeline)."""
+
+import math
+from dataclasses import dataclass
+
+
+@dataclass
+class Passage:
+    doc_id: str
+    text: str
+    vector: list[float]
+
+
+def cosine(a, b):
+    dot = sum(x * y for x, y in zip(a, b))
+    na = math.sqrt(sum(x * x for x in a))
+    nb = math.sqrt(sum(y * y for y in b))
+    return dot / (na * nb) if na and nb else 0.0
+
+
+class HybridIndex:
+    def __init__(self, alpha=0.5):
+        self.alpha = alpha
+        self.passages = []
+
+    def add(self, passage):
+        self.passages.append(passage)
+
+    def dense_scores(self, query_vector):
+        return {p.doc_id: cosine(query_vector, p.vector) for p in self.passages}
+
+    def sparse_scores(self, terms):
+        scores = {}
+        for p in self.passages:
+            scores[p.doc_id] = sum(p.text.lower().count(t.lower()) for t in terms)
+        return scores
+
+    def search(self, query_vector, terms, top_k=5):
+        dense = self.dense_scores(query_vector)
+        sparse = self.sparse_scores(terms)
+        fused = {d: self.alpha * dense[d] + (1 - self.alpha) * sparse.get(d, 0) for d in dense}
+        return sorted(fused.items(), key=lambda kv: kv[1], reverse=True)[:top_k]

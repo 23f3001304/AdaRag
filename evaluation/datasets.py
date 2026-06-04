@@ -47,6 +47,14 @@ give a short answer from the passage. Reply as JSON only: {{"question": "...", "
 Passage:
 {text}"""
 
+_SPAN_GEN_PROMPT = """\
+From the passage, write a question, and copy the single exact sentence (verbatim, word-for-word)
+from the passage that answers it. Reply as JSON only:
+{{"question": "...", "answer": "<exact sentence copied from the passage>"}}.
+
+Passage:
+{text}"""
+
 
 class QAGenerator:
     """Uses an LLM to generate one QA pair per chunk — the seed of the golden eval set."""
@@ -79,6 +87,17 @@ class QAGenerator:
     async def term_from_chunk(self, chunk_id: str, source: str, text: str) -> QAPair | None:
         """Generate a query hinging on a specific named term in the chunk (the exact-match case)."""
         data = extract_json(await self._llm.generate(_TERM_GEN_PROMPT.format(text=text)))
+        if not data.get("question") or not data.get("answer"):
+            return None
+        return QAPair(str(data["question"]), str(data["answer"]), chunk_id, source)
+
+    async def span_from_chunk(self, chunk_id: str, source: str, text: str) -> QAPair | None:
+        """Generate a question + a VERBATIM answer span copied from the chunk.
+
+        The span is real corpus text, so it can be found in whichever chunk covers it regardless of
+        how the document was split — the gold for comparing chunking strategies.
+        """
+        data = extract_json(await self._llm.generate(_SPAN_GEN_PROMPT.format(text=text)))
         if not data.get("question") or not data.get("answer"):
             return None
         return QAPair(str(data["question"]), str(data["answer"]), chunk_id, source)
