@@ -11,10 +11,10 @@ from core.models import Chunk as ChunkRow
 from core.models import Document
 from enrichment.contextual import ContextualEnricher
 from enrichment.metadata import ChunkMetadata, MetadataEnricher
-from index.qdrant_hybrid import QdrantIndex
+from index.qdrant_hybrid import QdrantIndex, entity_filter
 from rerank.base import Reranker
 from retrieval.hybrid import HybridRetriever
-from retrieval.query_rewrite import QueryRewriter
+from retrieval.query_rewrite import QueryTransformer
 
 
 class IngestService:
@@ -116,17 +116,24 @@ class AnswerService:
         reranker: Reranker,
         llm: LLMProvider,
         top_k: int,
-        rewriter: QueryRewriter | None = None,
+        transform: QueryTransformer | None = None,
+        query_meta: MetadataEnricher | None = None,
     ) -> None:
         self._retriever = retriever
         self._reranker = reranker
         self._llm = llm
         self._top_k = top_k
-        self._rewriter = rewriter
+        self._transform = transform
+        self._query_meta = query_meta
 
     async def answer(self, query: str) -> dict:
-        search = await self._rewriter.rewrite(query) if self._rewriter else query
-        candidates = await self._retriever.retrieve(search)
+        search = await self._transform.transform(query) if self._transform else query
+        qfilter = None
+        if self._query_meta is not None:
+            qfilter = entity_filter((await self._query_meta.extract(query)).entities)
+        candidates = await self._retriever.retrieve(search, qfilter)
+        if qfilter is not None and not candidates:
+            candidates = await self._retriever.retrieve(search)  # filter too strict; fall back
         hits = await self._reranker.rerank(query, candidates, self._top_k)
         if not hits:
             return {"answer": "No documents have been ingested yet.", "citations": []}

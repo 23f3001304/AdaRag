@@ -12,6 +12,15 @@ def _sparse(sparse: dict[int, float]) -> models.SparseVector:
     return models.SparseVector(indices=list(sparse.keys()), values=list(sparse.values()))
 
 
+def entity_filter(entities: list[str]) -> models.Filter | None:
+    """Filter for chunks whose stored entities overlap `entities` (None when the list is empty)."""
+    if not entities:
+        return None
+    return models.Filter(
+        must=[models.FieldCondition(key="entities", match=models.MatchAny(any=entities))]
+    )
+
+
 class QdrantIndex:
     """Owns one Qdrant collection: ensures its schema, upserts points, and searches it."""
 
@@ -43,13 +52,21 @@ class QdrantIndex:
         if points:
             await self._client.upsert(collection_name=self._collection, points=points)
 
-    async def search(self, dense: list[float], sparse: dict[int, float], top_k: int):
-        """Fetch dense + sparse candidates and fuse them server-side with RRF."""
+    async def search(
+        self,
+        dense: list[float],
+        sparse: dict[int, float],
+        top_k: int,
+        query_filter: models.Filter | None = None,
+    ):
+        """Fetch dense + sparse candidates, RRF-fuse server-side, optionally payload-filtered."""
         result = await self._client.query_points(
             collection_name=self._collection,
             prefetch=[
-                models.Prefetch(query=dense, using=DENSE, limit=top_k),
-                models.Prefetch(query=_sparse(sparse), using=SPARSE, limit=top_k),
+                models.Prefetch(query=dense, using=DENSE, limit=top_k, filter=query_filter),
+                models.Prefetch(
+                    query=_sparse(sparse), using=SPARSE, limit=top_k, filter=query_filter
+                ),
             ],
             query=models.FusionQuery(fusion=models.Fusion.RRF),
             limit=top_k,

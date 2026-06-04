@@ -53,6 +53,10 @@ class Settings(BaseSettings):
 
     # Query layer (Phase 4): LLM rewrites/expands the query before retrieval; rerank on original.
     rewrite_query: bool = False
+    # HyDE (Phase 4): retrieve with a generated hypothetical answer instead of the bare query.
+    hyde: bool = False
+    # Metadata filter (Phase 4): extract query entities, filter retrieval to chunks sharing them.
+    metadata_filter: bool = False
 
     # Cost / tuning
     cost_budget: str = "balanced"

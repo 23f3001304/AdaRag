@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from qdrant_client import models
+
 from core.interfaces import EmbeddingProvider
 from index.qdrant_hybrid import QdrantIndex
 
@@ -31,9 +33,11 @@ class HybridRetriever:
         self._index = index
         self._limit = limit
 
-    async def retrieve(self, query: str) -> list[Retrieved]:
+    async def retrieve(
+        self, query: str, query_filter: models.Filter | None = None
+    ) -> list[Retrieved]:
         dense, sparse = await self._embedder.embed_hybrid([query])
-        points = await self._index.search(dense[0], sparse[0], self._limit)
+        points = await self._index.search(dense[0], sparse[0], self._limit, query_filter)
         return [
             Retrieved(
                 chunk_id=str(p.id),

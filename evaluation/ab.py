@@ -14,6 +14,7 @@ from evaluation.datasets import QAPair
 from evaluation.metrics import recall_at_k, retrieval_metrics
 from rerank.base import Reranker
 from retrieval.hybrid import HybridRetriever
+from retrieval.query_rewrite import QueryTransformer
 
 RECALL_KS = (1, 3, 5, 10, 20)
 
@@ -38,22 +39,29 @@ def _scores(results: list[tuple[list[str], str]]) -> ABScores:
     return ABScores({k: recall_at_k(results, k) for k in RECALL_KS}, rm.mrr, rm.ndcg, rm.n)
 
 
-async def score_retrieval(retriever: HybridRetriever, qa_pairs: list[QAPair]) -> ABScores:
+async def score_retrieval(
+    retriever: HybridRetriever, qa_pairs: list[QAPair], transform: QueryTransformer | None = None
+) -> ABScores:
     """Score where each question's gold chunk ranks in the retriever's candidate pool."""
     results: list[tuple[list[str], str]] = []
     for qa in qa_pairs:
-        hits = await retriever.retrieve(qa.question)
+        q = await transform.transform(qa.question) if transform else qa.question
+        hits = await retriever.retrieve(q)
         results.append(([gold_key(h.source, h.position) for h in hits], qa.chunk_id))
     return _scores(results)
 
 
 async def score_reranked(
-    retriever: HybridRetriever, reranker: Reranker, qa_pairs: list[QAPair]
+    retriever: HybridRetriever,
+    reranker: Reranker,
+    qa_pairs: list[QAPair],
+    transform: QueryTransformer | None = None,
 ) -> ABScores:
     """Score the gold chunk's rank after the cross-encoder reorders the pool (end-to-end)."""
     results: list[tuple[list[str], str]] = []
     for qa in qa_pairs:
-        hits = await retriever.retrieve(qa.question)
+        q = await transform.transform(qa.question) if transform else qa.question
+        hits = await retriever.retrieve(q)
         ranked = await reranker.rerank(qa.question, hits, len(hits))
         results.append(([gold_key(h.source, h.position) for h in ranked], qa.chunk_id))
     return _scores(results)
