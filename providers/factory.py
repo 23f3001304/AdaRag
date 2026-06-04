@@ -54,8 +54,17 @@ class ProviderFactory:
         raise ValueError(f"Unsupported embedding_provider: {self._s.embedding_provider!r}")
 
     def vision(self) -> VisionProvider:
-        if self._s.vision_provider == "claude-cli":
+        s = self._s
+        if s.vision_provider == "claude-cli":
             from providers.cli import ClaudeCliVision
 
-            return ClaudeCliVision(self._s.vision_model, self._s.claude_cli_path)
-        raise ValueError(f"Unsupported vision_provider: {self._s.vision_provider!r}")
+            return ClaudeCliVision(s.vision_model, s.claude_cli_path)
+        if s.vision_provider == "gemini-cli":
+            from providers.cli import GeminiCliVision
+
+            return GeminiCliVision(s.vision_model, s.gemini_cli_path)
+        if s.vision_provider == "ollama":
+            from providers.ollama import OllamaVision
+
+            return OllamaVision(s.ollama_base_url, s.vision_model)
+        raise ValueError(f"Unsupported vision_provider: {s.vision_provider!r}")

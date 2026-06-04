@@ -22,8 +22,10 @@ class Settings(BaseSettings):
     gemini_cli_path: str = "gemini"
     llm_provider: str = "ollama"
     llm_model: str = "qwen3:8b-q8_0"
-    vision_provider: str = "anthropic"
-    vision_model: str = "claude-sonnet-4-6"
+    # vision_provider in {claude-cli, gemini-cli, ollama}. Ollama needs a vision model pulled
+    # (e.g. qwen2.5vl); the CLI backends ride their own login. Override model to match the provider.
+    vision_provider: str = "claude-cli"
+    vision_model: str = "sonnet"
     # Image OCR analyzer (Phase 4B): a dedicated local engine transcribes image text verbatim and
     # fuses it with the vision caption. "easyocr" (GPU, free, exact) or "" / "none" to disable.
     ocr_provider: str = "easyocr"

@@ -12,6 +12,8 @@ import json
 import os
 import shutil
 import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 from core.usage import METER
@@ -102,6 +104,18 @@ class GeminiCLILLM:
         return (await _run(argv, text)).strip()
 
 
+@contextmanager
+def _temp_image(image: bytes) -> Iterator[Path]:
+    """Write image bytes to a temp PNG the CLIs can @-reference, removed afterwards."""
+    tmp = Path("data") / f"_vis_{uuid.uuid4().hex}.png"
+    tmp.parent.mkdir(parents=True, exist_ok=True)
+    tmp.write_bytes(image)
+    try:
+        yield tmp
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
 class ClaudeCliVision:
     """Vision via the Claude CLI: writes the image to a temp file it reads with an @reference."""
 
@@ -110,17 +124,28 @@ class ClaudeCliVision:
         self._binary = binary
 
     async def describe(self, image: bytes, prompt: str) -> str:
-        tmp = Path("data") / f"_vis_{uuid.uuid4().hex}.png"
-        tmp.parent.mkdir(parents=True, exist_ok=True)
-        tmp.write_bytes(image)
-        try:
-            argv = [self._binary, "-p", "--output-format", "json"]
-            if self.model:
-                argv += ["--model", self.model]
-            data = json.loads(await _run(argv, f"{prompt}\n\n@{tmp.as_posix()}"))
-            if data.get("is_error"):
-                raise CLIError(f"claude vision: {data.get('result', 'error')}")
-            _record_usage(data)
-            return data["result"]
-        finally:
-            tmp.unlink(missing_ok=True)
+        argv = [self._binary, "-p", "--output-format", "json"]
+        if self.model:
+            argv += ["--model", self.model]
+        with _temp_image(image) as tmp:
+            raw = await _run(argv, f"{prompt}\n\n@{tmp.as_posix()}")
+        data = json.loads(raw)
+        if data.get("is_error"):
+            raise CLIError(f"claude vision: {data.get('result', 'error')}")
+        _record_usage(data)
+        return data["result"]
+
+
+class GeminiCliVision:
+    """Vision via the Gemini CLI: writes the image to a temp file it reads with an @reference."""
+
+    def __init__(self, model: str = "", binary: str = "gemini") -> None:
+        self.model = model
+        self._binary = binary
+
+    async def describe(self, image: bytes, prompt: str) -> str:
+        argv = [self._binary]
+        if self.model:
+            argv += ["-m", self.model]
+        with _temp_image(image) as tmp:
+            return (await _run(argv, f"{prompt}\n\n@{tmp.as_posix()}")).strip()
