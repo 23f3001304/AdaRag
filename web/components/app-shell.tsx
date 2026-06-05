@@ -8,16 +8,18 @@ import {
   FileStack,
   LayoutGrid,
   MessageSquare,
-  PanelLeft,
+  PanelLeftClose,
+  PanelLeftOpen,
   Search,
   SlidersHorizontal,
   Upload,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { type ComponentType, useState } from "react";
+import { type ComponentType, useEffect, useState } from "react";
 
 import { Logo } from "@/components/logo";
+import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 
 type NavItem = { href: string; label: string; icon: ComponentType<{ size?: number }>; soon?: boolean };
@@ -35,7 +37,23 @@ const NAV: NavItem[] = [
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const [online, setOnline] = useState<boolean | null>(null);
   const active = NAV.find((n) => n.href === pathname) ?? NAV[0];
+
+  useEffect(() => {
+    let live = true;
+    const ping = () =>
+      api
+        .health()
+        .then((h) => live && setOnline(h.status === "ok"))
+        .catch(() => live && setOnline(false));
+    ping();
+    const id = setInterval(ping, 8000);
+    return () => {
+      live = false;
+      clearInterval(id);
+    };
+  }, []);
 
   return (
     <div
@@ -112,24 +130,40 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         <div
           className={cn(
-            "flex items-center gap-2 border-t border-line py-3",
-            collapsed ? "justify-center px-0" : "px-4",
+            "flex border-t border-line p-2.5",
+            collapsed ? "flex-col items-center gap-2.5" : "items-center justify-between",
           )}
         >
-          <span className="size-1.5 shrink-0 rounded-full bg-accent" />
-          {!collapsed && <span className="font-mono text-[11px] text-muted">backend :8000</span>}
+          <span
+            className="flex items-center gap-2"
+            title={
+              online ? "backend online" : online === false ? "backend offline" : "checking backend"
+            }
+          >
+            <span
+              className={cn(
+                "size-1.5 shrink-0 rounded-full transition-colors",
+                online ? "bg-accent" : online === false ? "bg-danger" : "bg-faint",
+              )}
+            />
+            {!collapsed && (
+              <span className="font-mono text-[11px] text-muted">
+                {online ? "backend online" : online === false ? "backend offline" : "checking…"}
+              </span>
+            )}
+          </span>
+          <button
+            onClick={() => setCollapsed((c) => !c)}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            className="rounded-md p-1 text-muted transition-colors hover:bg-panel hover:text-fg"
+          >
+            {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+          </button>
         </div>
       </aside>
 
       <div className="flex min-h-screen min-w-0 flex-col">
-        <header className="flex h-14 items-center gap-3 border-b border-line px-5">
-          <button
-            onClick={() => setCollapsed((c) => !c)}
-            title="Toggle sidebar"
-            className="rounded-md p-1.5 text-muted transition-colors hover:bg-panel hover:text-fg"
-          >
-            <PanelLeft size={16} />
-          </button>
+        <header className="flex h-14 items-center gap-2.5 border-b border-line px-7">
           <span className="font-mono text-xs text-faint">AdaRag</span>
           <ChevronRight size={13} className="text-faint" />
           <span className="text-sm font-medium text-fg">{active.label}</span>

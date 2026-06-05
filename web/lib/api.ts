@@ -44,6 +44,7 @@ function json(body: unknown): RequestInit {
 }
 
 export const api = {
+  health: () => req<{ status: string; services: Record<string, boolean> }>("/health"),
   listBuckets: () => req<{ buckets: string[] }>("/buckets"),
   listDocuments: (bucket = "default") =>
     req<{ documents: DocumentInfo[] }>(`/documents?bucket=${encodeURIComponent(bucket)}`),
