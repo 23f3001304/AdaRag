@@ -62,6 +62,7 @@ export const api = {
     req<Answer>("/query", json({ query, bucket, skill })),
   chat: (sessionId: string, message: string, bucket = "default", skill?: SkillOverride) =>
     req<Answer>("/chat", json({ session_id: sessionId, message, bucket, skill })),
+  route: (message: string) => req<{ intent: "ingest" | "ask" }>("/route", json({ message })),
   ingest: (file: File, bucket = "default") => {
     const form = new FormData();
     form.append("file", file);

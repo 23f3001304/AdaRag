@@ -12,11 +12,13 @@ from api.documents import router as documents_router
 from api.health import router as health_router
 from api.ingest import router as ingest_router
 from api.query import router as query_router
+from api.route import router as route_router
 from core.buckets import BucketManager
 from core.config import get_settings
 from core.db import Database
 from index.qdrant_client import create_qdrant
 from ingestion.registry import build_registry
+from orchestrator.router import IntentRouter
 from providers.factory import ProviderFactory
 
 
@@ -34,7 +36,9 @@ async def lifespan(app: FastAPI):
     app.state.db = db
     app.state.qdrant = qdrant
     app.state.registry = registry
-    app.state.buckets = BucketManager(qdrant, db, settings, providers)
+    buckets = BucketManager(qdrant, db, settings, providers)
+    app.state.buckets = buckets
+    app.state.router = IntentRouter(buckets.llm)  # bucket-independent chat intent classifier
     try:
         yield
     finally:
@@ -47,6 +51,7 @@ app.include_router(health_router)
 app.include_router(ingest_router)
 app.include_router(query_router)
 app.include_router(chat_router)
+app.include_router(route_router)
 app.include_router(buckets_router)
 app.include_router(documents_router)
 

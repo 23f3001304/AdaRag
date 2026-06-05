@@ -1,14 +1,14 @@
 "use client";
 
-import { CornerDownLeft, User } from "lucide-react";
+import { Paperclip, User } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 
 import { useBucket } from "@/components/bucket-context";
+import { ChatComposer } from "@/components/chat-composer";
 import { ChatList } from "@/components/chat-list";
 import { Logo } from "@/components/logo";
 import { SkillPicker } from "@/components/skill-picker";
-import { Button } from "@/components/ui";
 import { api } from "@/lib/api";
 import { loadSkills, type Skill } from "@/lib/skills";
 
@@ -17,6 +17,7 @@ interface Turn {
   text: string;
   query?: string;
   sources?: string[];
+  file?: string; // filename attached to a user turn
 }
 interface Chat {
   id: string;
@@ -38,7 +39,6 @@ export default function ChatPage() {
   const { bucket } = useBucket();
   const [chats, setChats] = useState<Chat[]>([]);
   const [activeId, setActiveId] = useState("");
-  const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
   const [skills, setSkills] = useState<Skill[]>([]);
   const endRef = useRef<HTMLDivElement>(null);
@@ -88,22 +88,35 @@ export default function ChatPage() {
     if (id === activeId) setActiveId(safe[0].id);
   };
 
-  const send = async () => {
-    const text = msg.trim();
-    if (!text || busy || !active) return;
-    setMsg("");
+  const send = async (text: string, file: File | null) => {
+    if ((!text && !file) || busy || !active) return;
     const withUser = chats.map((c) =>
       c.id === active.id
         ? {
             ...c,
-            title: c.turns.length ? c.title : text.slice(0, 38),
-            turns: [...c.turns, { role: "user" as const, text }],
+            title: c.turns.length ? c.title : text.slice(0, 38) || file?.name || "New chat",
+            turns: [...c.turns, { role: "user" as const, text, file: file?.name }],
           }
         : c,
     );
     persist(withUser);
+    const reply = (turn: Turn) =>
+      persist(withUser.map((c) => (c.id === active.id ? { ...c, turns: [...c.turns, turn] } : c)));
     setBusy(true);
     try {
+      if (file) {
+        // The LLM routes the intent: "ingest it" adds the file; otherwise it's a normal question.
+        const intent = text ? (await api.route(text)).intent : "ingest";
+        if (intent === "ingest") {
+          const res = await api.ingest(file, targetBucket);
+          const n = res.chunks;
+          reply({
+            role: "assistant",
+            text: `Ingested ${res.source} - ${n} chunk${n === 1 ? "" : "s"} into the ${targetBucket} bucket.`,
+          });
+          return;
+        }
+      }
       const r = await api.chat(
         active.session,
         text,
@@ -111,28 +124,13 @@ export default function ChatPage() {
         activeSkill ? { persona: activeSkill.persona, top_k: activeSkill.topK } : undefined,
       );
       const sources = [...new Set(r.citations.map((c) => c.source))].slice(0, 5);
-      persist(
-        withUser.map((c) =>
-          c.id === active.id
-            ? { ...c, turns: [...c.turns, { role: "assistant", text: r.answer, query: r.search_query, sources }] }
-            : c,
-        ),
-      );
+      reply({ role: "assistant", text: r.answer, query: r.search_query, sources });
     } catch (e) {
       const off = String(e).includes("Failed to fetch");
-      persist(
-        withUser.map((c) =>
-          c.id === active.id
-            ? {
-                ...c,
-                turns: [
-                  ...c.turns,
-                  { role: "assistant", text: off ? "backend offline." : "LLM backend errored - is the CLI bridge running?" },
-                ],
-              }
-            : c,
-        ),
-      );
+      reply({
+        role: "assistant",
+        text: off ? "backend offline." : "request failed - is the CLI bridge running?",
+      });
     } finally {
       setBusy(false);
     }
@@ -170,7 +168,12 @@ export default function ChatPage() {
                 </span>
                 <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                   {t.query && <span className="font-mono text-[10px] text-faint">searched: {t.query}</span>}
-                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-fg">{t.text}</p>
+                  {t.file && (
+                    <span className="flex w-fit items-center gap-1 rounded border border-line px-1.5 py-0.5 font-mono text-[10px] text-muted">
+                      <Paperclip size={10} className="text-accent" /> {t.file}
+                    </span>
+                  )}
+                  {t.text && <p className="whitespace-pre-wrap text-sm leading-relaxed text-fg">{t.text}</p>}
                   {t.sources && t.sources.length > 0 && (
                     <div className="mt-1 flex flex-wrap gap-1.5">
                       {t.sources.map((s) => (
@@ -206,23 +209,7 @@ export default function ChatPage() {
           )}
           <div ref={endRef} />
         </div>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            send();
-          }}
-          className="flex gap-2 border-t border-line p-3"
-        >
-          <input
-            value={msg}
-            onChange={(e) => setMsg(e.target.value)}
-            placeholder="ask a question…"
-            className="flex-1 rounded-md border border-line bg-bg px-3 py-2.5 text-sm text-fg outline-none placeholder:text-faint focus:border-line-2"
-          />
-          <Button type="submit" disabled={busy}>
-            <CornerDownLeft size={14} /> Send
-          </Button>
-        </form>
+        <ChatComposer onSend={send} busy={busy} />
       </div>
     </div>
   );
