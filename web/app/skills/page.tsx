@@ -1,6 +1,6 @@
 "use client";
 
-import { Boxes, Plus, Trash2 } from "lucide-react";
+import { Boxes, Plus, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Button, Panel } from "@/components/ui";
@@ -131,13 +131,22 @@ export default function SkillsPage() {
         </Panel>
       )}
 
-      {skills.length === 0 && !draft ? (
-        <Panel className="px-5 py-10 text-center text-sm text-muted">
-          No skills yet. Create one to bundle a bucket, a persona, and a retrieval config.
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Panel className="flex flex-col gap-3 px-5 py-4">
+          <div className="flex items-start gap-2.5">
+            <Sparkles size={16} className="mt-0.5 shrink-0 text-accent" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-fg">/skill-creator</p>
+              <p className="truncate font-mono text-[11px] text-faint">built in · every bucket</p>
+            </div>
+          </div>
+          <p className="text-xs leading-relaxed text-muted">
+            Type <span className="font-mono text-accent">/skill-creator</span> in chat and describe the
+            assistant you want. It drafts and saves a skill you can reuse with{" "}
+            <span className="font-mono">/name</span>.
+          </p>
         </Panel>
-      ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {skills.map((s) => (
+        {skills.map((s) => (
             <Panel key={s.id} className="flex flex-col gap-3 px-5 py-4">
               <div className="flex items-start gap-2.5">
                 <Boxes size={16} className="mt-0.5 shrink-0 text-accent" />
@@ -167,8 +176,7 @@ export default function SkillsPage() {
               </button>
             </Panel>
           ))}
-        </div>
-      )}
+      </div>
     </div>
   );
 }

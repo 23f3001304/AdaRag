@@ -1,37 +1,23 @@
 "use client";
 
-import { Paperclip, User } from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
+import { Boxes, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { useBucket } from "@/components/bucket-context";
 import { ChatComposer } from "@/components/chat-composer";
 import { ChatList } from "@/components/chat-list";
-import { Logo } from "@/components/logo";
-import { MarkdownMessage } from "@/components/markdown-message";
+import { ChatMessages, type Source, type Turn } from "@/components/chat-messages";
 import { ModePicker } from "@/components/mode-picker";
 import { type Resource, ResourceModal } from "@/components/resource-modal";
 import { type ModeOption, api } from "@/lib/api";
-import { cn } from "@/lib/cn";
+import { loadSkills, saveSkills, type Skill } from "@/lib/skills";
 
-interface Source {
-  source: string;
-  path: string | null;
-  modality: string;
-}
-interface Turn {
-  role: "user" | "assistant";
-  text: string;
-  query?: string;
-  sources?: Source[];
-  file?: string; // filename attached to a user turn
-}
 interface Chat {
   id: string;
   title: string;
   session: string;
   turns: Turn[];
-  mode?: ModeOption; // per-chat model, survives across the conversation
+  mode?: ModeOption;
 }
 
 const KEY = "adarag.chats";
@@ -49,13 +35,17 @@ export default function ChatPage() {
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState<Resource | null>(null);
   const [modes, setModes] = useState<ModeOption[]>([]);
+  const [skills, setSkills] = useState<Skill[]>([]);
+  const [activeSkill, setActiveSkill] = useState<Skill | null>(null);
+  const [creating, setCreating] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    api
-      .listModes()
-      .then((r) => setModes(r.modes))
-      .catch(() => {});
+    api.listModes().then((r) => setModes(r.modes)).catch(() => {});
+    const sync = () => setSkills(loadSkills());
+    sync();
+    window.addEventListener("focus", sync);
+    return () => window.removeEventListener("focus", sync);
   }, []);
 
   useEffect(() => {
@@ -77,6 +67,15 @@ export default function ChatPage() {
   };
   const setChatMode = (mode: ModeOption | undefined) =>
     persist(chats.map((c) => (c.id === activeId ? { ...c, mode } : c)));
+  const select = (id: string) => {
+    setActiveId(id);
+    setActiveSkill(null);
+    setCreating(false);
+  };
+  const onPick = (target: Skill | "creator") => {
+    setCreating(target === "creator");
+    setActiveSkill(target === "creator" ? null : target);
+  };
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -85,13 +84,13 @@ export default function ChatPage() {
   const addChat = () => {
     const c = fresh();
     persist([c, ...chats]);
-    setActiveId(c.id);
+    select(c.id);
   };
   const delChat = (id: string) => {
     const next = chats.filter((c) => c.id !== id);
     const safe = next.length ? next : [fresh()];
     persist(safe);
-    if (id === activeId) setActiveId(safe[0].id);
+    if (id === activeId) select(safe[0].id);
   };
 
   const send = async (text: string, file: File | null) => {
@@ -110,8 +109,31 @@ export default function ChatPage() {
       persist(withUser.map((c) => (c.id === active.id ? { ...c, turns: [...c.turns, turn] } : c)));
     setBusy(true);
     try {
+      if (creating && text) {
+        const d = await api.draftSkill(text);
+        const skill: Skill = {
+          id: crypto.randomUUID(),
+          name: d.name,
+          bucket,
+          persona: d.persona,
+          topK: d.top_k,
+          rerank: 20,
+          enrich: true,
+          templates: [],
+        };
+        const next = [...loadSkills(), skill];
+        saveSkills(next);
+        setSkills(next);
+        setActiveSkill(skill);
+        setCreating(false);
+        const slug = d.name.toLowerCase().replace(/\s+/g, "-");
+        reply({
+          role: "assistant",
+          text: `Created skill **${d.name}** (top_k ${d.top_k}) and applied it. Reuse it anytime with \`/${slug}\`.\n\n> ${d.persona}`,
+        });
+        return;
+      }
       if (file) {
-        // The LLM routes the intent: "ingest it" adds the file; otherwise it's a normal question.
         const intent = text ? (await api.route(text)).intent : "ingest";
         if (intent === "ingest") {
           const res = await api.ingest(file, bucket);
@@ -123,7 +145,8 @@ export default function ChatPage() {
           return;
         }
       }
-      const r = await api.chat(active.session, text, bucket, active.mode);
+      const skill = activeSkill ? { persona: activeSkill.persona, top_k: activeSkill.topK } : undefined;
+      const r = await api.chat(active.session, text, bucket, active.mode, skill);
       const seen = new Set<string>();
       const sources: Source[] = [];
       for (const c of r.citations) {
@@ -146,95 +169,30 @@ export default function ChatPage() {
 
   return (
     <div className="flex h-[calc(100vh-7rem)] gap-5">
-      <ChatList
-        chats={chats}
-        activeId={activeId}
-        onSelect={setActiveId}
-        onAdd={addChat}
-        onDelete={delChat}
-      />
+      <ChatList chats={chats} activeId={activeId} onSelect={select} onAdd={addChat} onDelete={delChat} />
 
       <div className="flex min-w-0 flex-1 flex-col rounded-xl border border-line bg-panel/30">
         <div className="flex items-center justify-between gap-2 border-b border-line px-4 py-2">
-          <ModePicker modes={modes} value={active?.mode} onChange={setChatMode} />
+          <div className="flex min-w-0 items-center gap-2">
+            <ModePicker modes={modes} value={active?.mode} onChange={setChatMode} />
+            {activeSkill && <Chip onClear={() => setActiveSkill(null)}>{activeSkill.name}</Chip>}
+            {creating && <Chip onClear={() => setCreating(false)}>creating skill…</Chip>}
+          </div>
           <span className="font-mono text-[10px] text-faint">
             bucket: <span className="text-muted">{bucket}</span>
           </span>
         </div>
         <div className="flex-1 space-y-5 overflow-y-auto p-6">
-          {active && active.turns.length === 0 && !busy && (
-            <p className="mt-16 text-center text-sm text-faint">
-              Ask anything about the <span className="text-muted">{bucket}</span> bucket, or attach a
-              file and say &ldquo;ingest it&rdquo;.
-            </p>
-          )}
-          <AnimatePresence initial={false}>
-            {active?.turns.map((t, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="flex gap-3"
-              >
-                <Avatar role={t.role} />
-                <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                  {t.query && <span className="font-mono text-[10px] text-faint">searched: {t.query}</span>}
-                  {t.file && (
-                    <span className="flex w-fit items-center gap-1 rounded border border-line px-1.5 py-0.5 font-mono text-[10px] text-muted">
-                      <Paperclip size={10} className="text-accent" /> {t.file}
-                    </span>
-                  )}
-                  {t.text &&
-                    (t.role === "assistant" ? (
-                      <MarkdownMessage text={t.text} />
-                    ) : (
-                      <p className="whitespace-pre-wrap text-sm leading-relaxed text-fg">{t.text}</p>
-                    ))}
-                  {t.sources && t.sources.length > 0 && (
-                    <div className="mt-1 flex flex-wrap gap-1.5">
-                      {t.sources.map((s) =>
-                        s.path ? (
-                          <button
-                            key={s.source}
-                            onClick={() => setPreview({ path: s.path!, name: s.source, modality: s.modality })}
-                            title="Open source"
-                            className="flex items-center gap-1 rounded border border-line px-1.5 py-px font-mono text-[10px] text-muted transition-colors hover:border-accent/50 hover:text-fg"
-                          >
-                            {s.source}
-                          </button>
-                        ) : (
-                          <span
-                            key={s.source}
-                            className="truncate rounded border border-line px-1.5 py-px font-mono text-[10px] text-muted"
-                          >
-                            {s.source}
-                          </span>
-                        ),
-                      )}
-                    </div>
-                  )}
-                </div>
-              </motion.div>
-            ))}
-          </AnimatePresence>
-          {busy && (
-            <div className="flex gap-3">
-              <Avatar role="assistant" />
-              <div className="flex items-center gap-1 pt-2">
-                {[0, 1, 2].map((i) => (
-                  <motion.span
-                    key={i}
-                    className="size-1.5 rounded-full bg-muted"
-                    animate={{ opacity: [0.25, 1, 0.25] }}
-                    transition={{ duration: 1, repeat: Infinity, delay: i * 0.18 }}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
+          <ChatMessages turns={active?.turns ?? []} busy={busy} bucket={bucket} onPreview={setPreview} />
           <div ref={endRef} />
         </div>
-        <ChatComposer onSend={send} busy={busy} />
+        <ChatComposer
+          onSend={send}
+          onPick={onPick}
+          skills={skills}
+          busy={busy}
+          placeholder={creating ? "describe the skill you want…" : undefined}
+        />
       </div>
 
       <ResourceModal resource={preview} onClose={() => setPreview(null)} />
@@ -242,15 +200,14 @@ export default function ChatPage() {
   );
 }
 
-function Avatar({ role }: { role: "user" | "assistant" }) {
+function Chip({ children, onClear }: { children: React.ReactNode; onClear: () => void }) {
   return (
-    <span
-      className={cn(
-        "mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full",
-        role === "user" ? "bg-line-2 text-muted" : "bg-accent/15",
-      )}
-    >
-      {role === "user" ? <User size={14} /> : <Logo size={14} />}
+    <span className="flex items-center gap-1 rounded border border-accent/40 bg-accent/10 px-2 py-1 text-xs text-accent">
+      <Boxes size={11} />
+      <span className="max-w-32 truncate">{children}</span>
+      <button onClick={onClear} className="transition-colors hover:text-fg">
+        <X size={11} />
+      </button>
     </span>
   );
 }

@@ -121,9 +121,16 @@ export const api = {
     req<{ bucket: string; status: string }>(`/buckets/${encodeURIComponent(name)}`, { method: "DELETE" }),
   query: (query: string, bucket = "default", skill?: SkillOverride) =>
     req<Answer>("/query", json({ query, bucket, skill })),
-  chat: (sessionId: string, message: string, bucket = "default", mode?: ModeOption) =>
-    req<Answer>("/chat", json({ session_id: sessionId, message, bucket, mode })),
+  chat: (
+    sessionId: string,
+    message: string,
+    bucket = "default",
+    mode?: ModeOption,
+    skill?: SkillOverride,
+  ) => req<Answer>("/chat", json({ session_id: sessionId, message, bucket, mode, skill })),
   route: (message: string) => req<{ intent: "ingest" | "ask" }>("/route", json({ message })),
+  draftSkill: (description: string) =>
+    req<{ name: string; persona: string; top_k: number }>("/skills/draft", json({ description })),
   listModes: () => req<{ modes: ModeOption[] }>("/models"),
   optimizeRun: (bucket: string, trials = 20, max_queries = 12) =>
     req<{ started: boolean; running: boolean }>("/optimize/run", json({ bucket, trials, max_queries })),

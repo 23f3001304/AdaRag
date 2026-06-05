@@ -17,6 +17,7 @@ from api.models import router as models_router
 from api.optimize import router as optimize_router
 from api.query import router as query_router
 from api.route import router as route_router
+from api.skills import router as skills_router
 from core.buckets import BucketManager
 from core.config import get_settings
 from core.db import Database
@@ -65,6 +66,7 @@ app.include_router(files_router)
 app.include_router(optimize_router)
 app.include_router(models_router)
 app.include_router(config_router)
+app.include_router(skills_router)
 
 
 @app.get("/")
