@@ -7,6 +7,7 @@ import { useBucket } from "@/components/bucket-context";
 import { ChatComposer } from "@/components/chat-composer";
 import { ChatList } from "@/components/chat-list";
 import { ChatMessages, type Source, type Turn } from "@/components/chat-messages";
+import { useIngest } from "@/components/ingest-context";
 import { ModePicker } from "@/components/mode-picker";
 import { type Resource, ResourceModal } from "@/components/resource-modal";
 import { type ModeOption, api, chatStream, citationsToSources } from "@/lib/api";
@@ -30,6 +31,7 @@ const fresh = (): Chat => ({
 
 export default function ChatPage() {
   const { bucket } = useBucket();
+  const { ingest: ingestFile } = useIngest();
   const [chats, setChats] = useState<Chat[]>([]);
   const [activeId, setActiveId] = useState("");
   const [busy, setBusy] = useState(false);
@@ -181,21 +183,21 @@ export default function ChatPage() {
     const base = pushUser(text, file?.name);
     setBusy(true);
     if (file) {
-      // Attached file: route ingest-vs-ask (non-streamed).
+      // Attached file: route ingest-vs-ask. Ingest fires through the Ingest tab in the background
+      // so it never hangs the chat; any "who/what is this?" question bubbles up there.
       try {
         const intent = text ? (await api.route(text)).intent : "ingest";
         if (intent === "ingest") {
-          const res = await api.ingest(file, bucket);
-          const n = res.chunks;
+          ingestFile(file, bucket);
           pushAssistant(base, {
             role: "assistant",
-            text: `Ingested ${res.source} - ${n} chunk${n === 1 ? "" : "s"} into the ${bucket} bucket.`,
+            text: `Ingesting **${file.name}** into the ${bucket} bucket - track it on the Ingest tab. I'll raise a question there if I can't tell who or what it's about.`,
           });
           setBusy(false);
           return;
         }
       } catch {
-        pushAssistant(base, { role: "assistant", text: "ingest failed - is the CLI bridge running?" });
+        pushAssistant(base, { role: "assistant", text: "couldn't route the file - is the CLI bridge running?" });
         setBusy(false);
         return;
       }
