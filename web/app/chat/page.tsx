@@ -74,9 +74,77 @@ export default function ChatPage() {
     setActiveSkill(null);
     setCreating(false);
   };
-  const onPick = (target: Skill | "creator") => {
-    setCreating(target === "creator");
-    setActiveSkill(target === "creator" ? null : target);
+
+  const pushUser = (text: string, file?: string) => {
+    const next = chats.map((c) =>
+      c.id === activeId
+        ? {
+            ...c,
+            title: c.turns.length ? c.title : text.slice(0, 38) || file || "New chat",
+            turns: [...c.turns, { role: "user" as const, text, file }],
+          }
+        : c,
+    );
+    persist(next);
+    return next;
+  };
+  const pushAssistant = (base: Chat[], turn: Turn) =>
+    persist(base.map((c) => (c.id === activeId ? { ...c, turns: [...c.turns, turn] } : c)));
+
+  const createSkill = async (description: string) => {
+    if (busy) return;
+    const base = pushUser(description);
+    setCreating(false);
+    setBusy(true);
+    try {
+      const d = await api.draftSkill(description);
+      const skill: Skill = {
+        id: crypto.randomUUID(),
+        name: d.name,
+        bucket,
+        persona: d.persona,
+        topK: d.top_k,
+        rerank: 20,
+        enrich: true,
+        templates: [],
+      };
+      const next = [...loadSkills(), skill];
+      saveSkills(next);
+      setSkills(next);
+      setActiveSkill(skill);
+      const slug = d.name.toLowerCase().replace(/\s+/g, "-");
+      pushAssistant(base, {
+        role: "assistant",
+        text: `Created skill **${d.name}** (top_k ${d.top_k}) and applied it. Reuse it anytime with \`/${slug}\`.\n\n> ${d.persona}`,
+      });
+    } catch {
+      pushAssistant(base, {
+        role: "assistant",
+        text: "couldn't draft a skill - is the CLI bridge running?",
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onPick = (target: Skill | "creator", description?: string) => {
+    if (target !== "creator") {
+      setActiveSkill(target);
+      setCreating(false);
+      return;
+    }
+    setActiveSkill(null);
+    if (description?.trim()) {
+      void createSkill(description.trim());
+    } else {
+      setCreating(true);
+      if (active) {
+        pushAssistant(chats, {
+          role: "assistant",
+          text: "Describe the assistant you want and I'll build a skill - for example: *a terse security analyst that always cites sources and flags risks*.",
+        });
+      }
+    }
   };
 
   useEffect(() => {
@@ -97,44 +165,11 @@ export default function ChatPage() {
 
   const send = async (text: string, file: File | null) => {
     if ((!text && !file) || busy || !active) return;
-    const withUser = chats.map((c) =>
-      c.id === active.id
-        ? {
-            ...c,
-            title: c.turns.length ? c.title : text.slice(0, 38) || file?.name || "New chat",
-            turns: [...c.turns, { role: "user" as const, text, file: file?.name }],
-          }
-        : c,
-    );
-    persist(withUser);
-    const reply = (turn: Turn) =>
-      persist(withUser.map((c) => (c.id === active.id ? { ...c, turns: [...c.turns, turn] } : c)));
+    if (creating && text) return createSkill(text);
+    const base = pushUser(text, file?.name);
+    const reply = (turn: Turn) => pushAssistant(base, turn);
     setBusy(true);
     try {
-      if (creating && text) {
-        const d = await api.draftSkill(text);
-        const skill: Skill = {
-          id: crypto.randomUUID(),
-          name: d.name,
-          bucket,
-          persona: d.persona,
-          topK: d.top_k,
-          rerank: 20,
-          enrich: true,
-          templates: [],
-        };
-        const next = [...loadSkills(), skill];
-        saveSkills(next);
-        setSkills(next);
-        setActiveSkill(skill);
-        setCreating(false);
-        const slug = d.name.toLowerCase().replace(/\s+/g, "-");
-        reply({
-          role: "assistant",
-          text: `Created skill **${d.name}** (top_k ${d.top_k}) and applied it. Reuse it anytime with \`/${slug}\`.\n\n> ${d.persona}`,
-        });
-        return;
-      }
       if (file) {
         const intent = text ? (await api.route(text)).intent : "ingest";
         if (intent === "ingest") {

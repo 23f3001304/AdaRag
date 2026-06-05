@@ -66,12 +66,15 @@ export default function OptimizerPage() {
   const mine = state && state.bucket === bucket ? state : null;
   const running = (mine ? RUNNING.has(mine.status) : false) || starting;
   const done = mine?.status === "done";
-  const points = mine?.trials?.length ? mine.trials : DEMO;
-  const front = done ? (mine?.front ?? []) : mine?.trials?.length ? [] : DEMO;
+  const live = mine?.trials?.length ? mine.trials : null;
+  // Plot the Pareto front when done (a clean frontier), the accumulating trials while running, else
+  // the sample. Dominated trial points are not drawn.
+  const plot = done ? (mine?.front ?? []) : (live ?? DEMO);
+  const showLine = done || !live;
   const headline = done ? mine?.headline : !mine || mine.status === "idle" ? DEMO_HEADLINE : null;
 
-  const ms = points.map((p) => p.ms);
-  const nd = points.map((p) => p.ndcg);
+  const ms = plot.map((p) => p.ms);
+  const nd = plot.map((p) => p.ndcg);
   const xDomain = [
     Math.floor((Math.min(...ms) - 8) / 10) * 10,
     Math.ceil((Math.max(...ms) + 8) / 10) * 10,
@@ -139,15 +142,12 @@ export default function OptimizerPage() {
                 width={42}
               />
               <Tooltip cursor={{ stroke: "var(--color-line-2)" }} content={<TipBox />} />
-              <Scatter data={points} fill="var(--color-faint)" />
-              {front.length > 0 && (
-                <Scatter
-                  data={front}
-                  fill="var(--color-accent)"
-                  line={{ stroke: "var(--color-accent)", strokeWidth: 1.5 }}
-                  lineType="joint"
-                />
-              )}
+              <Scatter
+                data={plot}
+                fill="var(--color-accent)"
+                line={showLine ? { stroke: "var(--color-accent)", strokeWidth: 1.5 } : undefined}
+                lineType="joint"
+              />
             </ScatterChart>
           </ResponsiveContainer>
         </Panel>

@@ -4,6 +4,7 @@ import { Search as SearchIcon } from "lucide-react";
 import { useState } from "react";
 
 import { useBucket } from "@/components/bucket-context";
+import { MarkdownMessage } from "@/components/markdown-message";
 import { Button, Panel } from "@/components/ui";
 import { type Answer, api } from "@/lib/api";
 import { cn } from "@/lib/cn";
@@ -72,7 +73,9 @@ export default function SearchPage() {
         <div className="flex flex-col gap-5">
           <Panel className="px-6 py-5">
             <span className="font-mono text-[10px] uppercase tracking-wider text-faint">answer</span>
-            <p className="mt-2.5 whitespace-pre-wrap text-sm leading-relaxed text-fg">{res.answer}</p>
+            <div className="mt-2.5">
+              <MarkdownMessage text={res.answer} />
+            </div>
           </Panel>
           <div>
             <span className="font-mono text-[10px] uppercase tracking-wider text-faint">

@@ -16,7 +16,7 @@ export function ChatComposer({
   placeholder = "ask a question, or type / for skills…",
 }: {
   onSend: (text: string, file: File | null) => Promise<void>;
-  onPick: (target: Skill | "creator") => void;
+  onPick: (target: Skill | "creator", description?: string) => void;
   skills: Skill[];
   busy: boolean;
   placeholder?: string;
@@ -37,13 +37,23 @@ export function ChatComposer({
 
   const submit = async () => {
     const text = msg.trim();
-    const cmd = text.startsWith("/") ? text.slice(1).toLowerCase() : null;
-    if (cmd !== null) {
-      if (["skill-creator", "skill", "new-skill", "create"].includes(cmd)) return pick("creator");
+    if (text.startsWith("/")) {
+      // Split "/command rest" so "/skill-creator make a designer" routes here, not to the model.
+      const sp = text.search(/\s/);
+      const cmd = (sp < 0 ? text.slice(1) : text.slice(1, sp)).toLowerCase();
+      const rest = sp < 0 ? "" : text.slice(sp + 1).trim();
+      if (["skill-creator", "skill", "new-skill", "create"].includes(cmd)) {
+        setMsg("");
+        return onPick("creator", rest);
+      }
       const m = skills.find(
         (s) => s.name.toLowerCase() === cmd || s.name.toLowerCase().replace(/\s+/g, "-") === cmd,
       );
-      if (m) return pick(m);
+      if (m) {
+        setMsg("");
+        return onPick(m);
+      }
+      return; // unknown "/command" - never send it to the model (it has its own slash commands)
     }
     if ((!text && !file) || busy) return;
     const staged = file;
