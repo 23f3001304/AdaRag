@@ -55,6 +55,31 @@ async def _run(argv: list[str], stdin_text: str, timeout: float = DEFAULT_TIMEOU
     return out.decode("utf-8", "replace")
 
 
+async def _stream_lines(argv: list[str], stdin_text: str):
+    """Run argv and yield its stdout line by line; kills the process if the consumer stops early."""
+    proc = await asyncio.create_subprocess_exec(
+        *_resolve(argv),
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.DEVNULL,
+    )
+    try:
+        if proc.stdin:
+            proc.stdin.write(stdin_text.encode("utf-8"))
+            await proc.stdin.drain()
+            proc.stdin.close()
+        assert proc.stdout
+        while True:
+            line = await proc.stdout.readline()
+            if not line:
+                break
+            yield line.decode("utf-8", "replace")
+    finally:  # consumer cancelled (e.g. user hit Stop) -> terminate the CLI
+        if proc.returncode is None:
+            proc.kill()
+        await proc.wait()
+
+
 def _record_usage(data: dict) -> None:
     """Record a Claude CLI JSON result's cost/tokens/latency into the usage meter."""
     usage = data.get("usage", {})
@@ -87,6 +112,30 @@ class ClaudeCodeLLM:
             raise CLIError(f"claude: {data.get('result', 'error')}")
         _record_usage(data)
         return data["result"]
+
+    async def stream(self, prompt: str, *, system: str | None = None):
+        """Yield {type: text|thinking, text} deltas from `claude -p --output-format stream-json`."""
+        text = f"{system}\n\n{prompt}" if system else prompt
+        argv = [self._binary, "-p", "--output-format", "stream-json", "--verbose"]
+        argv += ["--include-partial-messages"]
+        if self.model:
+            argv += ["--model", self.model]
+        async for raw in _stream_lines(argv, text):
+            raw = raw.strip()
+            if not raw:
+                continue
+            try:
+                ev = json.loads(raw)
+            except json.JSONDecodeError:
+                continue
+            event = ev.get("event", {}) if ev.get("type") == "stream_event" else {}
+            if event.get("type") != "content_block_delta":
+                continue
+            delta = event.get("delta", {})
+            if delta.get("type") == "text_delta" and delta.get("text"):
+                yield {"type": "text", "text": delta["text"]}
+            elif delta.get("type") == "thinking_delta" and delta.get("thinking"):
+                yield {"type": "thinking", "text": delta["thinking"]}
 
 
 class GeminiCLILLM:

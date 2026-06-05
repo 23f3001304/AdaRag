@@ -17,6 +17,7 @@ only on a trusted network: this runs your authenticated CLIs and can edit your .
 from __future__ import annotations
 
 import base64
+import json
 import re
 import shutil
 import sys
@@ -24,6 +25,7 @@ from pathlib import Path
 
 import httpx
 from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -207,6 +209,26 @@ async def generate(body: GenerateIn) -> dict:
         text, thinking = await llm.generate_thinking(body.prompt, system=body.system)
         return {"text": text, "thinking": thinking}
     return {"text": await llm.generate(body.prompt, system=body.system)}
+
+
+@app.post("/stream")
+async def stream(body: GenerateIn) -> StreamingResponse:
+    """Stream a generation as SSE lines: `data: {"type": text|thinking|done|error, "text": ...}`."""
+    llm = _llm_for(body.provider, body.model) if body.provider and body.model else _state.llm
+
+    async def events():
+        try:
+            if hasattr(llm, "stream"):
+                async for ev in llm.stream(body.prompt, system=body.system):
+                    yield f"data: {json.dumps(ev)}\n\n"
+            else:  # provider without streaming: emit the whole answer at once
+                text = await llm.generate(body.prompt, system=body.system)
+                yield f"data: {json.dumps({'type': 'text', 'text': text})}\n\n"
+        except Exception as exc:
+            yield f"data: {json.dumps({'type': 'error', 'text': str(exc)})}\n\n"
+        yield 'data: {"type": "done"}\n\n'
+
+    return StreamingResponse(events(), media_type="text/event-stream")
 
 
 @app.post("/vision")

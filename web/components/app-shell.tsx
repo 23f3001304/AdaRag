@@ -65,7 +65,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       )}
     >
       <aside className="flex min-w-0 flex-col border-r border-line">
-        <div className="flex h-14 items-center gap-2.5 border-b border-line px-4">
+        <div
+          className={cn(
+            "flex h-14 items-center border-b border-line",
+            collapsed ? "justify-center px-0" : "gap-2.5 px-4",
+          )}
+        >
           <Logo size={20} />
           {!collapsed && (
             <>

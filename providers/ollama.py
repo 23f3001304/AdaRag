@@ -28,6 +28,18 @@ class OllamaLLM:
         )
         return resp["response"], resp.get("thinking") or ""
 
+    async def stream(self, prompt: str, *, system: str | None = None):
+        """Yield {type: text|thinking, text} deltas from a streaming ollama generation."""
+        async for chunk in await self._client.generate(
+            model=self.model, prompt=prompt, system=system or "", think=True, stream=True
+        ):
+            think = chunk.get("thinking")
+            if think:
+                yield {"type": "thinking", "text": think}
+            text = chunk.get("response")
+            if text:
+                yield {"type": "text", "text": text}
+
 
 class OllamaVision:
     """VisionProvider backed by a local Ollama multimodal model (e.g. qwen2.5vl, llava, moondream).

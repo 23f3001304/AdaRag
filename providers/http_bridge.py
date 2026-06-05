@@ -8,6 +8,7 @@ with ``llm_provider`` / ``vision_provider`` = "cli-bridge" and point ``cli_bridg
 from __future__ import annotations
 
 import base64
+import json
 
 import httpx
 
@@ -73,6 +74,21 @@ class HttpBridgeLLM:
             resp.raise_for_status()
             data = resp.json()
             return data["text"], data.get("thinking") or None
+
+    async def stream(self, prompt: str, *, system: str | None = None):
+        """Yield {type, text} delta events by consuming the bridge's /stream SSE."""
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            async with client.stream(
+                "POST", f"{self._url}/stream", json=self._payload(prompt, system)
+            ) as resp:
+                resp.raise_for_status()
+                async for line in resp.aiter_lines():
+                    if not line.startswith("data: "):
+                        continue
+                    ev = json.loads(line[6:])
+                    if ev.get("type") == "done":
+                        break
+                    yield ev
 
 
 class HttpBridgeVision:
