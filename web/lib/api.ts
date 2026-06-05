@@ -51,6 +51,19 @@ export interface ModeOption {
   model: string;
 }
 
+// The host provider config (API keys reported only as set/unset, never by value).
+export interface ProviderConfig {
+  llm_provider: string;
+  llm_model: string;
+  vision_provider: string;
+  vision_model: string;
+  ocr_provider: string;
+  claude_cli_path: string;
+  gemini_cli_path: string;
+  ollama_base_url: string;
+  keys: { anthropic: boolean; openai: boolean; openrouter: boolean };
+}
+
 export interface TrialPoint {
   k: number;
   ndcg: number;
@@ -115,6 +128,13 @@ export const api = {
   optimizeRun: (bucket: string, trials = 20, max_queries = 12) =>
     req<{ started: boolean; running: boolean }>("/optimize/run", json({ bucket, trials, max_queries })),
   optimizeStatus: () => req<StudyState>("/optimize/status"),
+  getConfig: () => req<ProviderConfig>("/config"),
+  putConfig: (data: Record<string, string>) =>
+    req<{ ok: boolean; error?: string; config?: ProviderConfig }>("/config", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(data),
+    }),
   ingest: (file: File, bucket = "default") => {
     const form = new FormData();
     form.append("file", file);

@@ -9,6 +9,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Search,
+  Settings2,
   SlidersHorizontal,
   Upload,
 } from "lucide-react";
@@ -32,6 +33,7 @@ const NAV: NavItem[] = [
   { href: "/chat", label: "Chat", icon: MessageSquare },
   { href: "/skills", label: "Skills", icon: Boxes },
   { href: "/optimizer", label: "Optimizer", icon: SlidersHorizontal },
+  { href: "/settings", label: "Settings", icon: Settings2 },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {

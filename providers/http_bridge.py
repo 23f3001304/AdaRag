@@ -22,6 +22,22 @@ async def bridge_models(base_url: str) -> list[dict]:
         return resp.json().get("modes", [])
 
 
+async def bridge_get_config(base_url: str) -> dict:
+    """Read the host config from a bridge (keys reported as set/unset only)."""
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.get(f"{base_url.rstrip('/')}/config")
+        resp.raise_for_status()
+        return resp.json()
+
+
+async def bridge_put_config(base_url: str, data: dict) -> dict:
+    """Update the host config via a bridge (writes its .env + hot-reloads)."""
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        resp = await client.put(f"{base_url.rstrip('/')}/config", json=data)
+        resp.raise_for_status()
+        return resp.json()
+
+
 class HttpBridgeLLM:
     """LLMProvider that proxies generate() to a host CLI bridge over HTTP.
 

@@ -8,6 +8,7 @@ from fastapi import FastAPI
 
 from api.buckets import router as buckets_router
 from api.chat import router as chat_router
+from api.config import router as config_router
 from api.documents import router as documents_router
 from api.files import router as files_router
 from api.health import router as health_router
@@ -37,6 +38,7 @@ async def lifespan(app: FastAPI):
     registry = build_registry(providers.vision(), settings.ocr_provider)
 
     await db.create_all()
+    app.state.settings = settings
     app.state.db = db
     app.state.qdrant = qdrant
     app.state.registry = registry
@@ -62,6 +64,7 @@ app.include_router(documents_router)
 app.include_router(files_router)
 app.include_router(optimize_router)
 app.include_router(models_router)
+app.include_router(config_router)
 
 
 @app.get("/")
