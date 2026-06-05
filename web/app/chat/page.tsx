@@ -1,15 +1,15 @@
 "use client";
 
-import { CornerDownLeft, Plus, Trash2, User } from "lucide-react";
+import { CornerDownLeft, User } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 
 import { useBucket } from "@/components/bucket-context";
+import { ChatList } from "@/components/chat-list";
 import { Logo } from "@/components/logo";
 import { SkillPicker } from "@/components/skill-picker";
 import { Button } from "@/components/ui";
 import { api } from "@/lib/api";
-import { cn } from "@/lib/cn";
 import { loadSkills, type Skill } from "@/lib/skills";
 
 interface Turn {
@@ -140,34 +140,13 @@ export default function ChatPage() {
 
   return (
     <div className="flex h-[calc(100vh-7rem)] gap-5">
-      <aside className="flex w-52 shrink-0 flex-col gap-2">
-        <Button onClick={addChat} variant="outline" className="justify-start">
-          <Plus size={14} /> New chat
-        </Button>
-        <div className="flex flex-1 flex-col gap-0.5 overflow-y-auto">
-          {chats.map((c) => (
-            <div
-              key={c.id}
-              onClick={() => setActiveId(c.id)}
-              className={cn(
-                "group flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-sm transition-colors",
-                c.id === activeId ? "bg-panel text-fg" : "text-muted hover:bg-panel hover:text-fg",
-              )}
-            >
-              <span className="truncate">{c.title}</span>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  delChat(c.id);
-                }}
-                className="ml-auto shrink-0 text-faint opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
-              >
-                <Trash2 size={13} />
-              </button>
-            </div>
-          ))}
-        </div>
-      </aside>
+      <ChatList
+        chats={chats}
+        activeId={activeId}
+        onSelect={setActiveId}
+        onAdd={addChat}
+        onDelete={delChat}
+      />
 
       <div className="flex min-w-0 flex-1 flex-col rounded-xl border border-line bg-panel/30">
         <div className="flex items-center justify-between gap-2 border-b border-line px-4 py-2.5">
