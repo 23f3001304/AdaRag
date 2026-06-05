@@ -18,6 +18,8 @@ const EDITABLE = [
   "claude_cli_path",
   "gemini_cli_path",
   "ollama_base_url",
+  "ambiguity_provider",
+  "ambiguity_model",
 ] as const;
 
 const input =
@@ -130,6 +132,33 @@ export default function SettingsPage() {
                 <Select value={draft.ocr_provider} options={OCR_PROVIDERS} onChange={(v) => set("ocr_provider", v)} />
               </Field>
             </div>
+            <SectionTitle>Ingest disambiguation</SectionTitle>
+            <p className="-mt-2 text-xs text-faint">
+              Which model decides whether an ingested file&apos;s subject needs a clarifying question.
+              Leave blank to use the default language model above.
+            </p>
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="provider">
+                <Select
+                  value={draft.ambiguity_provider}
+                  options={["", ...LLM_PROVIDERS]}
+                  onChange={(v) => set("ambiguity_provider", v)}
+                />
+              </Field>
+              <Field label="model">
+                <input
+                  list="amb-models"
+                  className={input}
+                  value={draft.ambiguity_model}
+                  onChange={(e) => set("ambiguity_model", e.target.value)}
+                />
+                <datalist id="amb-models">
+                  {modelsFor(draft.ambiguity_provider).map((m) => (
+                    <option key={m} value={m} />
+                  ))}
+                </datalist>
+              </Field>
+            </div>
           </Panel>
 
           <Panel className="flex flex-col gap-4 px-6 py-5">
@@ -208,7 +237,7 @@ function Select({
       {!options.includes(value) && <option value={value}>{value}</option>}
       {options.map((o) => (
         <option key={o} value={o} className="bg-panel">
-          {o}
+          {o || "(default)"}
         </option>
       ))}
     </select>

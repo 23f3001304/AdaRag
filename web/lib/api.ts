@@ -63,6 +63,8 @@ export interface ProviderConfig {
   claude_cli_path: string;
   gemini_cli_path: string;
   ollama_base_url: string;
+  ambiguity_provider: string;
+  ambiguity_model: string;
   keys: { anthropic: boolean; openai: boolean; openrouter: boolean };
 }
 

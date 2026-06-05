@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from collections.abc import Callable
 
 from chunking.base import Chunk, Chunker
 from core.clarifications import ClarificationStore
@@ -57,7 +58,7 @@ class IngestService:
         db: Database,
         enricher: ContextualEnricher | None = None,
         metadata: MetadataEnricher | None = None,
-        detector: AmbiguityDetector | None = None,
+        detector_factory: Callable[[], AmbiguityDetector] | None = None,
         clarifications: ClarificationStore | None = None,
         bucket: str = "default",
     ) -> None:
@@ -67,7 +68,7 @@ class IngestService:
         self._db = db
         self._enricher = enricher
         self._metadata = metadata
-        self._detector = detector
+        self._detector_factory = detector_factory
         self._clarifications = clarifications
         self._bucket = bucket
 
@@ -114,14 +115,15 @@ class IngestService:
 
     async def _flag_ambiguity(self, doc_id: str, source: str, text: str, modality: str) -> None:
         """If a file's subject isn't identifiable, file a clarification (never blocks ingest)."""
-        if self._detector is None or self._clarifications is None:
+        if self._detector_factory is None or self._clarifications is None:
             return
+        detector = self._detector_factory()
         try:
-            amb = await self._detector.detect(text, modality)
+            amb = await detector.detect(text, modality)
             if amb is None:
                 return
             entities = await self._index.distinct_entities()
-            names = await self._detector.pick_candidates(amb.question, entities)
+            names = await detector.pick_candidates(amb.question, entities)
         except Exception:
             return  # detection must never break an ingest
         await self._clarifications.create(

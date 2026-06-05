@@ -1,7 +1,5 @@
-"""RAG buckets: multiple isolated pipelines in one deployment, each its own Qdrant collection.
-
-Shared stateless collaborators (embedder, reranker, LLM, chunker) are built once; only the index
-and its bound services are per-bucket and cached. The "default" bucket keeps the base collection.
+"""RAG buckets: isolated pipelines in one deployment, each its own Qdrant collection. Shared
+collaborators are built once; only the index and its bound services are per-bucket and cached.
 """
 
 from __future__ import annotations
@@ -14,6 +12,7 @@ from qdrant_client import models
 from sqlalchemy import delete as sa_delete
 
 from chunking.registry import build_chunker
+from core.ambiguity_config import AmbiguityConfig
 from core.clarifications import ClarificationStore
 from core.config import Settings
 from core.db import Database
@@ -21,7 +20,6 @@ from core.interfaces import EmbeddingProvider, LLMProvider
 from core.models import Document
 from core.pipeline import AnswerService, IngestService
 from core.retag import retag_document
-from enrichment.ambiguity import AmbiguityDetector
 from enrichment.contextual import ContextualEnricher
 from enrichment.metadata import MetadataEnricher
 from index.qdrant_hybrid import QdrantIndex
@@ -87,7 +85,7 @@ class BucketManager:
         )
         self._enricher = ContextualEnricher(self._llm) if settings.enrich_context else None
         self._metadata = MetadataEnricher(self._llm) if settings.enrich_metadata else None
-        self._ambiguity = AmbiguityDetector(self._llm)
+        self._amb_config = AmbiguityConfig(self._llm, self.llm_for)
         self._clarifications = ClarificationStore(db)
         self._transform: HydeTransformer | QueryRewriter | None = None
         if settings.hyde:
@@ -116,6 +114,11 @@ class BucketManager:
     def clarifications(self) -> ClarificationStore:
         """The pending-clarification store (served + answered by the clarifications API)."""
         return self._clarifications
+
+    @property
+    def ambiguity(self) -> AmbiguityConfig:
+        """The runtime-switchable ingest ambiguity model (read + set via the config API)."""
+        return self._amb_config
 
     async def retag(self, bucket: str, doc_id: str, entity: str) -> int:
         """Apply a clarification answer: weave the chosen entity into the document's chunks."""
@@ -157,7 +160,7 @@ class BucketManager:
                 self._db,
                 self._enricher,
                 self._metadata,
-                self._ambiguity,
+                self._amb_config.detector,
                 self._clarifications,
                 bucket,
             )

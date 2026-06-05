@@ -22,6 +22,9 @@ class ConfigUpdate(BaseModel):
     anthropic_api_key: str | None = None
     openai_api_key: str | None = None
     openrouter_api_key: str | None = None
+    # The ingest ambiguity model is held API-side (live), not in the bridge .env.
+    ambiguity_provider: str | None = None
+    ambiguity_model: str | None = None
 
 
 def _own_config(s) -> dict:
@@ -47,14 +50,24 @@ async def get_config(request: Request) -> dict:
     """The current provider config (read from the host bridge when forwarding to it)."""
     s = request.app.state.settings
     if s.llm_provider == "cli-bridge":
-        return await bridge_get_config(s.cli_bridge_url)
-    return _own_config(s)
+        cfg = await bridge_get_config(s.cli_bridge_url)
+    else:
+        cfg = _own_config(s)
+    provider, model = request.app.state.buckets.ambiguity.get()
+    cfg["ambiguity_provider"] = provider
+    cfg["ambiguity_model"] = model
+    return cfg
 
 
 @router.put("/config")
 async def put_config(request: Request, body: ConfigUpdate) -> dict:
-    """Update the provider config (proxied to the bridge's .env + hot-reload under cli-bridge)."""
+    """Update the config; the ambiguity model is set API-side, the rest proxied to the bridge."""
+    data = body.model_dump(exclude_none=True)
+    amb_provider = data.pop("ambiguity_provider", None)
+    amb_model = data.pop("ambiguity_model", None)
+    if amb_provider is not None or amb_model is not None:
+        request.app.state.buckets.ambiguity.set(amb_provider or "", amb_model or "")
     s = request.app.state.settings
-    if s.llm_provider == "cli-bridge":
-        return await bridge_put_config(s.cli_bridge_url, body.model_dump(exclude_none=True))
-    return {"ok": False, "error": "editing config requires the cli-bridge deployment"}
+    if s.llm_provider != "cli-bridge":
+        return {"ok": False, "error": "editing config requires the cli-bridge deployment"}
+    return await bridge_put_config(s.cli_bridge_url, data) if data else {"ok": True}
