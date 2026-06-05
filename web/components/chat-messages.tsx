@@ -2,7 +2,7 @@
 
 import { Brain, ChevronDown, Paperclip, User } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Logo } from "@/components/logo";
 import { MarkdownMessage } from "@/components/markdown-message";
@@ -60,7 +60,7 @@ export function ChatMessages({
               )}
               {t.text &&
                 (t.role === "assistant" ? (
-                  <MarkdownMessage text={t.text} />
+                  <StreamingText text={t.text} live={busy && i === turns.length - 1} />
                 ) : (
                   <p className="whitespace-pre-wrap text-sm leading-relaxed text-fg">{t.text}</p>
                 ))}
@@ -109,6 +109,50 @@ export function ChatMessages({
       )}
     </>
   );
+}
+
+// Reveal chunky stream deltas (claude-cli emits ~60-80 chars at a time) as a smooth char-by-char
+// type-out. Only this component re-renders per animation frame; the chat list stays paced by the
+// network. A turn that was never live (history, page reloads) renders in full immediately.
+function StreamingText({ text, live }: { text: string; live: boolean }) {
+  const animate = useRef(live);
+  if (live) animate.current = true;
+  const [shown, setShown] = useState(animate.current ? 0 : text.length);
+  const liveRef = useRef(live);
+  liveRef.current = live;
+  const lenRef = useRef(text.length);
+  lenRef.current = text.length;
+  const shownRef = useRef(shown);
+  shownRef.current = shown;
+
+  useEffect(() => {
+    if (!animate.current) return;
+    let raf = 0;
+    let stopped = false;
+    const tick = () => {
+      if (stopped) return;
+      const s = shownRef.current;
+      const len = lenRef.current;
+      if (s < len) {
+        // Cap the per-frame step so a big delta types out steadily instead of popping in.
+        // ~4 chars/frame at 60fps is a smooth typewriter that still keeps up with the stream.
+        const step = Math.min(4, Math.max(1, Math.ceil((len - s) / 10)));
+        const next = Math.min(len, s + step);
+        shownRef.current = next;
+        setShown(next);
+      } else if (!liveRef.current) {
+        return; // caught up and the stream finished - stop the loop for good
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => {
+      stopped = true;
+      cancelAnimationFrame(raf);
+    };
+  }, []);
+
+  return <MarkdownMessage text={animate.current ? text.slice(0, shown) : text} />;
 }
 
 function ThinkingBlock({ text, live }: { text: string; live: boolean }) {
