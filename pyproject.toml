@@ -33,6 +33,7 @@ dependencies = [
     "pypdf>=6.12.2",
     "faster-whisper>=1.2.1",
     "easyocr>=1.7.2",  # dedicated local OCR analyzer for images (GPU via the cu128 torch)
+    "optuna>=4.0",  # Phase 5: self-tuning search over pipeline knobs (relevance vs latency/cost)
 ]
 
 [dependency-groups]
