@@ -65,7 +65,7 @@ export function ChatList({
               key={c.id}
               onClick={() => onSelect(c.id)}
               className={cn(
-                "group flex cursor-pointer items-start gap-2 rounded-md px-2.5 py-2 text-sm transition-colors",
+                "group flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-sm transition-colors",
                 c.id === activeId ? "bg-panel text-fg" : "text-muted hover:bg-panel hover:text-fg",
               )}
             >

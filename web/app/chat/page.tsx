@@ -8,9 +8,8 @@ import { useBucket } from "@/components/bucket-context";
 import { ChatComposer } from "@/components/chat-composer";
 import { ChatList } from "@/components/chat-list";
 import { Logo } from "@/components/logo";
-import { SkillPicker } from "@/components/skill-picker";
 import { api } from "@/lib/api";
-import { loadSkills, type Skill } from "@/lib/skills";
+import { cn } from "@/lib/cn";
 
 interface Turn {
   role: "user" | "assistant";
@@ -24,7 +23,6 @@ interface Chat {
   title: string;
   session: string;
   turns: Turn[];
-  skillId?: string;
 }
 
 const KEY = "adarag.chats";
@@ -40,15 +38,7 @@ export default function ChatPage() {
   const [chats, setChats] = useState<Chat[]>([]);
   const [activeId, setActiveId] = useState("");
   const [busy, setBusy] = useState(false);
-  const [skills, setSkills] = useState<Skill[]>([]);
   const endRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const sync = () => setSkills(loadSkills());
-    sync();
-    window.addEventListener("focus", sync); // pick up skills created on the Skills page
-    return () => window.removeEventListener("focus", sync);
-  }, []);
 
   useEffect(() => {
     let saved: Chat[] = [];
@@ -67,10 +57,6 @@ export default function ChatPage() {
     setChats(next);
     localStorage.setItem(KEY, JSON.stringify(next));
   };
-  const activeSkill = skills.find((s) => s.id === active?.skillId);
-  const targetBucket = activeSkill?.bucket || bucket;
-  const setChatSkill = (id: string | undefined) =>
-    persist(chats.map((c) => (c.id === activeId ? { ...c, skillId: id } : c)));
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -108,21 +94,16 @@ export default function ChatPage() {
         // The LLM routes the intent: "ingest it" adds the file; otherwise it's a normal question.
         const intent = text ? (await api.route(text)).intent : "ingest";
         if (intent === "ingest") {
-          const res = await api.ingest(file, targetBucket);
+          const res = await api.ingest(file, bucket);
           const n = res.chunks;
           reply({
             role: "assistant",
-            text: `Ingested ${res.source} - ${n} chunk${n === 1 ? "" : "s"} into the ${targetBucket} bucket.`,
+            text: `Ingested ${res.source} - ${n} chunk${n === 1 ? "" : "s"} into the ${bucket} bucket.`,
           });
           return;
         }
       }
-      const r = await api.chat(
-        active.session,
-        text,
-        targetBucket,
-        activeSkill ? { persona: activeSkill.persona, top_k: activeSkill.topK } : undefined,
-      );
+      const r = await api.chat(active.session, text, bucket);
       const sources = [...new Set(r.citations.map((c) => c.source))].slice(0, 5);
       reply({ role: "assistant", text: r.answer, query: r.search_query, sources });
     } catch (e) {
@@ -147,25 +128,27 @@ export default function ChatPage() {
       />
 
       <div className="flex min-w-0 flex-1 flex-col rounded-xl border border-line bg-panel/30">
-        <div className="flex items-center justify-between gap-2 border-b border-line px-4 py-2.5">
-          <SkillPicker skills={skills} value={active?.skillId} onChange={setChatSkill} />
+        <div className="flex items-center justify-end border-b border-line px-4 py-2">
           <span className="font-mono text-[10px] text-faint">
-            bucket: <span className="text-muted">{targetBucket}</span>
+            bucket: <span className="text-muted">{bucket}</span>
           </span>
         </div>
         <div className="flex-1 space-y-5 overflow-y-auto p-6">
           {active && active.turns.length === 0 && !busy && (
             <p className="mt-16 text-center text-sm text-faint">
-              Ask anything about the <span className="text-muted">{targetBucket}</span> bucket
-              {activeSkill && <> as <span className="text-accent">{activeSkill.name}</span></>}.
+              Ask anything about the <span className="text-muted">{bucket}</span> bucket, or attach a
+              file and say &ldquo;ingest it&rdquo;.
             </p>
           )}
           <AnimatePresence initial={false}>
             {active?.turns.map((t, i) => (
-              <motion.div key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex gap-3">
-                <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md border border-line bg-bg">
-                  {t.role === "user" ? <User size={13} className="text-muted" /> : <Logo size={13} />}
-                </span>
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex gap-3"
+              >
+                <Avatar role={t.role} />
                 <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                   {t.query && <span className="font-mono text-[10px] text-faint">searched: {t.query}</span>}
                   {t.file && (
@@ -192,10 +175,8 @@ export default function ChatPage() {
           </AnimatePresence>
           {busy && (
             <div className="flex gap-3">
-              <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md border border-line bg-bg">
-                <Logo size={13} />
-              </span>
-              <div className="flex items-center gap-1 pt-1.5">
+              <Avatar role="assistant" />
+              <div className="flex items-center gap-1 pt-2">
                 {[0, 1, 2].map((i) => (
                   <motion.span
                     key={i}
@@ -212,5 +193,18 @@ export default function ChatPage() {
         <ChatComposer onSend={send} busy={busy} />
       </div>
     </div>
+  );
+}
+
+function Avatar({ role }: { role: "user" | "assistant" }) {
+  return (
+    <span
+      className={cn(
+        "mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full",
+        role === "user" ? "bg-line-2 text-muted" : "bg-accent/15",
+      )}
+    >
+      {role === "user" ? <User size={14} /> : <Logo size={14} />}
+    </span>
   );
 }
