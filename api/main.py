@@ -8,6 +8,7 @@ from fastapi import FastAPI
 
 from api.buckets import router as buckets_router
 from api.chat import router as chat_router
+from api.clarifications import router as clarifications_router
 from api.config import router as config_router
 from api.documents import router as documents_router
 from api.files import router as files_router
@@ -67,6 +68,7 @@ app.include_router(optimize_router)
 app.include_router(models_router)
 app.include_router(config_router)
 app.include_router(skills_router)
+app.include_router(clarifications_router)
 
 
 @app.get("/")

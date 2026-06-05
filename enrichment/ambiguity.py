@@ -28,6 +28,15 @@ Modality: {modality}
 Content:
 {text}"""
 
+_CANDIDATES_PROMPT = """A knowledge base needs a human to answer this question:
+"{question}"
+
+These entity names were extracted from the same knowledge base:
+{entities}
+
+Reply with JSON only: {{"candidates": [<the entities that are plausible answers>]}}. For a "who
+is ..." question return the people; ignore topics, places, and objects. If none fit, return []."""
+
 
 @dataclass(frozen=True)
 class Ambiguity:
@@ -53,3 +62,17 @@ class AmbiguityDetector:
         if not question:
             return None
         return Ambiguity(subject=str(data.get("subject") or "").strip(), question=question)
+
+    async def pick_candidates(self, question: str, entities: list[str]) -> list[str]:
+        """From a bucket's entities, the subset that plausibly answers the clarifying question."""
+        if not entities:
+            return []
+        bullets = "\n".join(f"- {e}" for e in entities)
+        prompt = _CANDIDATES_PROMPT.format(question=question, entities=bullets)
+        try:
+            data = extract_json(await self._llm.generate(prompt))
+        except Exception:
+            return []
+        picked = data.get("candidates")
+        chosen = {str(p).strip() for p in picked} if isinstance(picked, list) else set()
+        return [e for e in entities if e in chosen]

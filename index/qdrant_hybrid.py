@@ -52,6 +52,47 @@ class QdrantIndex:
         if points:
             await self._client.upsert(collection_name=self._collection, points=points, wait=True)
 
+    async def fetch_doc(self, doc_id: str) -> list[tuple[str, dict]]:
+        """Every (point_id, payload) for a document's chunks - used to re-tag and re-embed them."""
+        flt = models.Filter(
+            must=[models.FieldCondition(key="doc_id", match=models.MatchValue(value=doc_id))]
+        )
+        out: list[tuple[str, dict]] = []
+        offset = None
+        while True:
+            points, offset = await self._client.scroll(
+                collection_name=self._collection,
+                scroll_filter=flt,
+                limit=256,
+                offset=offset,
+                with_payload=True,
+                with_vectors=False,
+            )
+            out.extend((str(p.id), p.payload or {}) for p in points)
+            if offset is None:
+                return out
+
+    async def distinct_entities(self) -> list[str]:
+        """Distinct entity names across the collection (candidate answers for a clarification)."""
+        seen: dict[str, None] = {}
+        offset = None
+        while True:
+            try:
+                points, offset = await self._client.scroll(
+                    collection_name=self._collection,
+                    limit=256,
+                    offset=offset,
+                    with_payload=True,
+                    with_vectors=False,
+                )
+            except Exception:
+                return list(seen)  # collection may not exist yet
+            for p in points:
+                for entity in (p.payload or {}).get("entities") or []:
+                    seen.setdefault(str(entity), None)
+            if offset is None:
+                return list(seen)
+
     async def search(
         self,
         dense: list[float],

@@ -118,12 +118,15 @@ class IngestService:
             return
         try:
             amb = await self._detector.detect(text, modality)
+            if amb is None:
+                return
+            entities = await self._index.distinct_entities()
+            names = await self._detector.pick_candidates(amb.question, entities)
         except Exception:
             return  # detection must never break an ingest
-        if amb is not None:
-            await self._clarifications.create(
-                self._bucket, doc_id, source, modality, amb.subject, amb.question
-            )
+        await self._clarifications.create(
+            self._bucket, doc_id, source, modality, amb.subject, amb.question, names
+        )
 
     async def _contexts(self, chunks: list[Chunk], document: str) -> list[str]:
         """One situating context per chunk, enriched concurrently (empty when off or on failure)."""

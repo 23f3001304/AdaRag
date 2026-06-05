@@ -1,9 +1,7 @@
 """RAG buckets: multiple isolated pipelines in one deployment, each its own Qdrant collection.
 
-A bucket scopes ingest, retrieval, and chat to its own corpus, so a user runs several independent
-RAG pipelines at once. The heavy stateless collaborators (embedder, reranker, LLM, chunker) are
-built once and shared; only the index (and its bound services) are per-bucket and cached. The
-"default" bucket maps to the base collection so existing single-corpus behavior is unchanged.
+Shared stateless collaborators (embedder, reranker, LLM, chunker) are built once; only the index
+and its bound services are per-bucket and cached. The "default" bucket keeps the base collection.
 """
 
 from __future__ import annotations
@@ -22,6 +20,7 @@ from core.db import Database
 from core.interfaces import EmbeddingProvider, LLMProvider
 from core.models import Document
 from core.pipeline import AnswerService, IngestService
+from core.retag import retag_document
 from enrichment.ambiguity import AmbiguityDetector
 from enrichment.contextual import ContextualEnricher
 from enrichment.metadata import MetadataEnricher
@@ -113,6 +112,15 @@ class BucketManager:
         """The shared cross-encoder reranker (reused by the optimizer)."""
         return self._reranker
 
+    @property
+    def clarifications(self) -> ClarificationStore:
+        """The pending-clarification store (served + answered by the clarifications API)."""
+        return self._clarifications
+
+    async def retag(self, bucket: str, doc_id: str, entity: str) -> int:
+        """Apply a clarification answer: weave the chosen entity into the document's chunks."""
+        return await retag_document(self._index(bucket), self._embedder, doc_id, entity)
+
     def llm_for(self, provider: str, model: str) -> LLMProvider:
         """Build an LLM for a specific provider+model (per-request chat model switching).
 
@@ -185,6 +193,7 @@ class BucketManager:
                 await session.execute(sa_delete(Document).where(Document.id.in_(doc_ids)))
                 await session.commit()
         await self._qdrant.delete_collection(collection)
+        await self._clarifications.purge(bucket)
         self._cache.pop(bucket, None)
 
     async def delete_document(self, bucket: str, source: str) -> None:
@@ -206,6 +215,7 @@ class BucketManager:
             await self._qdrant.delete(
                 collection_name=collection, points_selector=models.FilterSelector(filter=flt)
             )
+        await self._clarifications.purge(bucket, source)
 
     async def _scan(
         self, collection: str, scroll_filter: models.Filter | None = None

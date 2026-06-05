@@ -63,6 +63,7 @@ class Clarification(Base):
     modality: Mapped[str] = mapped_column(String(32), default="text")
     subject: Mapped[str] = mapped_column(Text)  # "the person in this photo"
     question: Mapped[str] = mapped_column(Text)  # "Who is the person in this image?"
+    candidates: Mapped[str] = mapped_column(Text, default="[]")  # JSON: bucket names that may fit
     status: Mapped[str] = mapped_column(String(16), default="pending")  # pending|answered|dismissed
     answer: Mapped[str] = mapped_column(Text, default="")  # the entity the user chose/typed
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
