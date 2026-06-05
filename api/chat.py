@@ -60,4 +60,10 @@ async def chat_stream(request: Request, body: ChatRequest) -> StreamingResponse:
         except Exception as exc:  # surface failures to the client instead of a dropped stream
             yield f"data: {json.dumps({'type': 'error', 'text': str(exc)})}\n\n"
 
-    return StreamingResponse(events(), media_type="text/event-stream")
+    # no-transform tells the Next dev proxy's gzip layer to leave the stream alone: gzip buffers
+    # the whole response, which collapses the per-token SSE into one burst at the end.
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"},
+    )

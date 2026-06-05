@@ -89,10 +89,24 @@ function json(body: unknown): RequestInit {
   return { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) };
 }
 
+// URL for a preserved original. The stored path is base64url-encoded and the route is /files/blob
+// (not /files/raw?path=<hash>.pdf): that older shape looks like a tracking beacon, so ad/privacy
+// blockers drop it with an empty 204 - which the browser saves as a 0-byte file. An opaque,
+// extension-free param carries no pattern for those filter lists to match.
+function blobUrl(path: string, name?: string, download?: boolean): string {
+  const p = btoa(path).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const q = [`path=${p}`];
+  if (name) q.push(`name=${encodeURIComponent(name)}`);
+  if (download) q.push("download=1"); // serve as octet-stream so PDF-blocking extensions pass it
+  return `${BASE}/files/blob?${q.join("&")}`;
+}
+
 // Download a preserved original with its real filename. Fetches to a blob so the name is exact
 // (not derived from the URL) and a missing file surfaces as an error instead of saving junk.
 export async function downloadFile(path: string, name: string): Promise<void> {
-  const res = await fetch(`${BASE}/files/raw?path=${encodeURIComponent(path)}`, { cache: "no-store" });
+  // Fetch without a name param: that keeps the server from sending Content-Disposition: attachment,
+  // which some download-blocking extensions drop. The anchor's download attribute names the file.
+  const res = await fetch(blobUrl(path, undefined, true), { cache: "no-store" });
   if (!res.ok) throw new Error(res.status === 404 ? "original no longer stored" : `failed (${res.status})`);
   const obj = URL.createObjectURL(await res.blob());
   const a = document.createElement("a");
@@ -177,8 +191,7 @@ export const api = {
       { method: "DELETE" },
     ),
   // A direct URL to a preserved original (for <img>/<audio>/<video> or a download link).
-  fileUrl: (path: string, name?: string) =>
-    `${BASE}/files/raw?path=${encodeURIComponent(path)}${name ? `&name=${encodeURIComponent(name)}` : ""}`,
+  fileUrl: (path: string, name?: string) => blobUrl(path, name),
   createBucket: (name: string) =>
     req<{ bucket: string; status: string }>(`/buckets/${encodeURIComponent(name)}`, { method: "POST" }),
   deleteBucket: (name: string) =>
