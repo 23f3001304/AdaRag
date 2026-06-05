@@ -6,10 +6,12 @@ import asyncio
 import uuid
 
 from chunking.base import Chunk, Chunker
+from core.clarifications import ClarificationStore
 from core.db import Database
 from core.interfaces import EmbeddingProvider, LLMProvider
 from core.models import Chunk as ChunkRow
 from core.models import Document
+from enrichment.ambiguity import AmbiguityDetector
 from enrichment.contextual import ContextualEnricher
 from enrichment.metadata import ChunkMetadata, MetadataEnricher
 from index.qdrant_hybrid import QdrantIndex, entity_filter
@@ -55,6 +57,9 @@ class IngestService:
         db: Database,
         enricher: ContextualEnricher | None = None,
         metadata: MetadataEnricher | None = None,
+        detector: AmbiguityDetector | None = None,
+        clarifications: ClarificationStore | None = None,
+        bucket: str = "default",
     ) -> None:
         self._chunker = chunker
         self._embedder = embedder
@@ -62,6 +67,9 @@ class IngestService:
         self._db = db
         self._enricher = enricher
         self._metadata = metadata
+        self._detector = detector
+        self._clarifications = clarifications
+        self._bucket = bucket
 
     async def ingest(
         self, source: str, text: str, modality: str = "text", original_path: str | None = None
@@ -101,7 +109,21 @@ class IngestService:
                 for cid, c in zip(ids, chunks, strict=True)
             )
             await session.commit()
+        await self._flag_ambiguity(doc_id, source, text, modality)
         return {"document_id": doc_id, "chunks": len(chunks), "source": source}
+
+    async def _flag_ambiguity(self, doc_id: str, source: str, text: str, modality: str) -> None:
+        """If a file's subject isn't identifiable, file a clarification (never blocks ingest)."""
+        if self._detector is None or self._clarifications is None:
+            return
+        try:
+            amb = await self._detector.detect(text, modality)
+        except Exception:
+            return  # detection must never break an ingest
+        if amb is not None:
+            await self._clarifications.create(
+                self._bucket, doc_id, source, modality, amb.subject, amb.question
+            )
 
     async def _contexts(self, chunks: list[Chunk], document: str) -> list[str]:
         """One situating context per chunk, enriched concurrently (empty when off or on failure)."""

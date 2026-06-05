@@ -45,3 +45,24 @@ class EvalQuestion(Base):
     question: Mapped[str] = mapped_column(Text)
     answer: Mapped[str] = mapped_column(Text)
     is_gold: Mapped[bool] = mapped_column(default=False)  # hand-labeled vs generated
+
+
+class Clarification(Base):
+    """A file whose subject the ingest detector couldn't pin to a name, pending a user's answer.
+
+    Answering it tags the document's chunks with the chosen entity so retrieval can tell two
+    people's photos apart. Kept loose (no FK) so a clarification survives independent of the doc.
+    """
+
+    __tablename__ = "clarifications"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    bucket: Mapped[str] = mapped_column(String(255))
+    document_id: Mapped[str] = mapped_column(String(36))
+    source: Mapped[str] = mapped_column(String(1024))
+    modality: Mapped[str] = mapped_column(String(32), default="text")
+    subject: Mapped[str] = mapped_column(Text)  # "the person in this photo"
+    question: Mapped[str] = mapped_column(Text)  # "Who is the person in this image?"
+    status: Mapped[str] = mapped_column(String(16), default="pending")  # pending|answered|dismissed
+    answer: Mapped[str] = mapped_column(Text, default="")  # the entity the user chose/typed
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())

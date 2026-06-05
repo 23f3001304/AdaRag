@@ -16,11 +16,13 @@ from qdrant_client import models
 from sqlalchemy import delete as sa_delete
 
 from chunking.registry import build_chunker
+from core.clarifications import ClarificationStore
 from core.config import Settings
 from core.db import Database
 from core.interfaces import EmbeddingProvider, LLMProvider
 from core.models import Document
 from core.pipeline import AnswerService, IngestService
+from enrichment.ambiguity import AmbiguityDetector
 from enrichment.contextual import ContextualEnricher
 from enrichment.metadata import MetadataEnricher
 from index.qdrant_hybrid import QdrantIndex
@@ -86,6 +88,8 @@ class BucketManager:
         )
         self._enricher = ContextualEnricher(self._llm) if settings.enrich_context else None
         self._metadata = MetadataEnricher(self._llm) if settings.enrich_metadata else None
+        self._ambiguity = AmbiguityDetector(self._llm)
+        self._clarifications = ClarificationStore(db)
         self._transform: HydeTransformer | QueryRewriter | None = None
         if settings.hyde:
             self._transform = HydeTransformer(self._llm)
@@ -139,7 +143,15 @@ class BucketManager:
             index = self._index(bucket)
             retriever = HybridRetriever(self._embedder, index, self._s.rerank_candidates)
             ingest = IngestService(
-                self._chunker, self._embedder, index, self._db, self._enricher, self._metadata
+                self._chunker,
+                self._embedder,
+                index,
+                self._db,
+                self._enricher,
+                self._metadata,
+                self._ambiguity,
+                self._clarifications,
+                bucket,
             )
             answer = AnswerService(
                 retriever,
