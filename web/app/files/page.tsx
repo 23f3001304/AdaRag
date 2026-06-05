@@ -29,9 +29,9 @@ export default function FilesPage() {
     api
       .listDocuments("default")
       .then((r) => setDocs(r.documents))
-      .catch(() => {
+      .catch((e) => {
         setDocs([]);
-        setError("backend offline");
+        setError(String(e).includes("Failed to fetch") ? "offline" : "stale");
       });
   }, []);
   useEffect(() => load(), [load]);
@@ -63,9 +63,11 @@ export default function FilesPage() {
           <Empty>loading…</Empty>
         ) : docs.length === 0 ? (
           <Empty>
-            {error
-              ? `${error} - start it, then ingest a file from the Ingest tab.`
-              : "No files yet. Ingest one from the Ingest tab."}
+            {error === "offline"
+              ? "backend offline - start it, then ingest a file from the Ingest tab."
+              : error === "stale"
+                ? "the /documents endpoint is missing - rebuild the backend image."
+                : "No files yet. Ingest one from the Ingest tab."}
           </Empty>
         ) : (
           docs.map((d) => {

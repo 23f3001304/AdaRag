@@ -28,10 +28,10 @@ const NAV: NavItem[] = [
   { href: "/", label: "Overview", icon: LayoutGrid },
   { href: "/ingest", label: "Ingest", icon: Upload },
   { href: "/files", label: "Files", icon: FileStack },
-  { href: "/search", label: "Search", icon: Search, soon: true },
-  { href: "/chat", label: "Chat", icon: MessageSquare, soon: true },
-  { href: "/skills", label: "Skills", icon: Boxes, soon: true },
-  { href: "/optimizer", label: "Optimizer", icon: SlidersHorizontal, soon: true },
+  { href: "/search", label: "Search", icon: Search },
+  { href: "/chat", label: "Chat", icon: MessageSquare },
+  { href: "/skills", label: "Skills", icon: Boxes },
+  { href: "/optimizer", label: "Optimizer", icon: SlidersHorizontal },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -164,9 +164,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <div className="flex min-h-screen min-w-0 flex-col">
         <header className="flex h-14 items-center gap-2.5 border-b border-line px-7">
-          <span className="font-mono text-xs text-faint">AdaRag</span>
+          <Link
+            href="/"
+            className="rounded font-mono text-xs text-faint transition-colors hover:text-fg"
+          >
+            AdaRag
+          </Link>
           <ChevronRight size={13} className="text-faint" />
-          <span className="text-sm font-medium text-fg">{active.label}</span>
+          <Link
+            href={active.href}
+            className="text-sm font-medium text-fg transition-colors hover:text-accent"
+          >
+            {active.label}
+          </Link>
         </header>
         <main className="flex-1 overflow-y-auto px-7 py-7">{children}</main>
       </div>
