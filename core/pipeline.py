@@ -125,6 +125,8 @@ Question: {query}
 
 Answer:"""
 
+_NO_DOCS = "No documents have been ingested yet."
+
 _REASON_PROMPT = """In 2-3 short sentences, explain how you reached this answer from the sources
 (which mattered, what you inferred). Be concise and do not repeat the answer.
 
@@ -176,6 +178,42 @@ class AnswerService:
         thinking: bool = False,
     ) -> dict:
         """Answer a query; a skill may override persona/top_k and a mode may override the LLM."""
+        hits = await self._rank(query, top_k)
+        if not hits:
+            return {"answer": _NO_DOCS, "citations": [], "thinking": None}
+        prompt, citations = self._build(query, hits, persona)
+        gen = llm or self._llm
+        if thinking:
+            answer, think = await _answer_with_thinking(gen, prompt, query)
+        else:
+            answer, think = await gen.generate(prompt), None
+        return {"answer": answer.strip(), "citations": citations, "thinking": think}
+
+    async def answer_stream(
+        self,
+        query: str,
+        *,
+        persona: str | None = None,
+        top_k: int | None = None,
+        llm: LLMProvider | None = None,
+    ):
+        """Stream the answer as {type: text|thinking|done} events; citations ride the done event."""
+        hits = await self._rank(query, top_k)
+        if not hits:
+            yield {"type": "text", "text": _NO_DOCS}
+            yield {"type": "done", "citations": []}
+            return
+        prompt, citations = self._build(query, hits, persona)
+        gen = llm or self._llm
+        if hasattr(gen, "stream"):
+            async for event in gen.stream(prompt):
+                yield event
+        else:  # provider without streaming: one text event with the whole answer
+            yield {"type": "text", "text": (await gen.generate(prompt)).strip()}
+        yield {"type": "done", "citations": citations}
+
+    async def _rank(self, query: str, top_k: int | None):
+        """Retrieve + rerank a query to the top_k hits (shared by answer / answer_stream)."""
         search = await self._transform.transform(query) if self._transform else query
         qfilter = None
         if self._query_meta is not None:
@@ -184,22 +222,15 @@ class AnswerService:
         if qfilter is not None and not candidates:
             candidates = await self._retriever.retrieve(search)  # filter too strict; fall back
         k = top_k if top_k and top_k > 0 else self._top_k
-        hits = await self._reranker.rerank(query, candidates, k)
-        if not hits:
-            return {
-                "answer": "No documents have been ingested yet.",
-                "citations": [],
-                "thinking": None,
-            }
+        return await self._reranker.rerank(query, candidates, k)
+
+    @staticmethod
+    def _build(query: str, hits: list, persona: str | None) -> tuple[str, list[dict]]:
+        """Build the answer prompt (with persona) and the citation list from reranked hits."""
         context = "\n\n".join(f"[{i + 1}] ({h.source}) {h.text}" for i, h in enumerate(hits))
         prompt = _ANSWER_PROMPT.format(context=context, query=query)
         if persona and persona.strip():
             prompt = f"{persona.strip()}\n\n{prompt}"
-        gen = llm or self._llm
-        if thinking:
-            answer, think = await _answer_with_thinking(gen, prompt, query)
-        else:
-            answer, think = await gen.generate(prompt), None
         citations = [
             {
                 "n": i + 1,
@@ -211,4 +242,4 @@ class AnswerService:
             }
             for i, h in enumerate(hits)
         ]
-        return {"answer": answer.strip(), "citations": citations, "thinking": think}
+        return prompt, citations

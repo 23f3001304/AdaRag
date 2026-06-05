@@ -50,6 +50,15 @@ def _is_chitchat(message: str) -> bool:
     return message.strip().lower().rstrip("!.?") in _GREETINGS
 
 
+async def _stream_or_full(llm, prompt: str):
+    """Yield {type: text, ...} events from a streaming LLM, or one text event if it can't stream."""
+    if hasattr(llm, "stream"):
+        async for event in llm.stream(prompt):
+            yield event
+    else:
+        yield {"type": "text", "text": (await llm.generate(prompt)).strip()}
+
+
 class ChatOrchestrator:
     """Multi-turn RAG chat: contextualize each turn against history, then answer with citations."""
 
@@ -92,6 +101,39 @@ class ChatOrchestrator:
             "search_query": query,  # surfaced so the rewrite is inspectable
             "thinking": result.get("thinking"),
         }
+
+    async def chat_stream(
+        self,
+        session_id: str,
+        message: str,
+        *,
+        persona: str | None = None,
+        top_k: int | None = None,
+        llm: LLMProvider | None = None,
+    ):
+        """Stream a turn as events: {type: query|text|thinking|done}; history updated at the end."""
+        gen = llm or self._llm
+        history = self._sessions[session_id]
+        if _is_chitchat(message):
+            full = ""
+            async for event in _stream_or_full(gen, _CHITCHAT_PROMPT.format(message=message)):
+                if event.get("type") == "text":
+                    full += event["text"]
+                yield event
+            history.append((message, full.strip()))
+            yield {"type": "done", "citations": [], "search_query": None}
+            return
+        query = await self._contextualize(message, history, gen) if history else message
+        yield {"type": "query", "text": query}
+        full = ""
+        async for event in self._answer.answer_stream(query, persona=persona, top_k=top_k, llm=llm):
+            if event.get("type") == "done":
+                yield {"type": "done", "citations": event["citations"], "search_query": query}
+            else:
+                if event.get("type") == "text":
+                    full += event["text"]
+                yield event
+        history.append((message, full.strip()))
 
     async def _contextualize(
         self, message: str, history: deque[tuple[str, str]], llm: LLMProvider
