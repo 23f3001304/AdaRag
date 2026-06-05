@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+/* AdaRag design system - engineered-SaaS, dark, one lime accent. Linear/Vercel lineage. */
+@theme {
+  --color-bg: #0b0d10; /* cool near-black, not true #000 */
+  --color-panel: #131720;
+  --color-panel-2: #1a1f29;
+  --color-line: #242a34;
+  --color-line-2: #343c48;
+  --color-fg: #e7e9ec; /* off-white, not #fff */
+  --color-muted: #98a0ab;
+  --color-faint: #5b636f;
+  --color-accent: #bef264; /* lime - the single accent */
+  --color-accent-2: #a3e635;
+  --color-accent-ink: #15220a; /* text on accent */
+  --color-danger: #f4795b;
+
+  /* modality scale - data-viz only, deliberately non-purple */
+  --color-mod-text: #6aa6ff;
+  --color-mod-image: #f5b342;
+  --color-mod-audio: #34d3bd;
+  --color-mod-video: #fb7185;
+
+  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, "SF Mono", monospace;
+
+  --radius: 0.5rem;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  ::selection {
+    background: color-mix(in oklab, var(--color-accent) 28%, transparent);
+    color: var(--color-fg);
+  }
+  /* thin, dark scrollbars to match the surface */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line-2) transparent;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+}
+
+/* faint engineered grid for empty/hero surfaces, used sparingly via .grid-field */
+@utility grid-field {
+  background-image:
+    linear-gradient(to right, color-mix(in oklab, var(--color-line) 60%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in oklab, var(--color-line) 60%, transparent) 1px, transparent 1px);
+  background-size: 44px 44px;
+}

@@ -1,10 +1,22 @@
-# Web (Phase 6)
+# AdaRag web
 
-Next.js frontend — the surface where the engineering becomes visible:
+The frontend for AdaRag: an engineered-SaaS dashboard over the FastAPI backend.
 
-- Upload a file and watch the profiler's routing decision live.
-- Query with a retrieval trace: which chunks came back, their scores, and why, with original
-  images and audio timecodes shown inline.
-- An optimizer dashboard: the Pareto front of accuracy against cost, and the adopted config.
+- **Stack:** Next.js 16 (App Router) + React 19 + Tailwind v4 + IBM Plex.
+- **Design:** dark, Linear/Vercel lineage, a single lime accent. See `app/globals.css` for the tokens.
 
-Built in Phase 6. See [../DESIGN.md](../DESIGN.md).
+## Run
+
+The dev server proxies `/api/*` to the backend, so set `BACKEND_URL` to wherever it runs
+(host API on `:8001`, or the Docker `api` service on `:8000`, the default):
+
+    npm install
+    BACKEND_URL=http://localhost:8001 npm run dev
+
+Then open http://localhost:3000.
+
+## Layout
+
+- `app/` - routes (App Router). `layout.tsx` wires fonts + the shell; `page.tsx` is the overview.
+- `components/` - `app-shell.tsx` (sidebar + topbar) and `ui.tsx` (Button, Panel, Badge, Stat).
+- `lib/` - `api.ts` (typed backend client) and `cn.ts` (class merge).
