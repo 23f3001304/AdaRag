@@ -19,9 +19,9 @@ export default function Overview() {
         <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-accent">
           adaptive multimodal rag
         </p>
-        <h2 className="mt-3 max-w-2xl text-[2.6rem] font-light leading-[1.12] tracking-tight text-fg">
+        <h2 className="mt-3 max-w-2xl font-display text-[2.7rem] font-normal leading-[1.08] tracking-tight text-fg">
           Profile every file, route it to the right pipeline, and{" "}
-          <span className="font-semibold">self-tune against cost</span>.
+          <span className="font-extrabold">self-tune against cost</span>.
         </h2>
         <p className="mt-5 max-w-xl text-sm leading-relaxed text-muted">
           Hybrid retrieval over text, images, audio, and video. Isolated buckets, a conversational

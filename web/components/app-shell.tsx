@@ -13,12 +13,13 @@ import { usePathname } from "next/navigation";
 import type { ComponentType } from "react";
 
 import { cn } from "@/lib/cn";
+import { Logo } from "@/components/logo";
 
 type NavItem = { href: string; label: string; icon: ComponentType<{ size?: number }>; soon?: boolean };
 
 const NAV: NavItem[] = [
   { href: "/", label: "Overview", icon: LayoutGrid },
-  { href: "/ingest", label: "Ingest", icon: Upload, soon: true },
+  { href: "/ingest", label: "Ingest", icon: Upload },
   { href: "/search", label: "Search", icon: Search, soon: true },
   { href: "/chat", label: "Chat", icon: MessageSquare, soon: true },
   { href: "/skills", label: "Skills", icon: Boxes, soon: true },
@@ -33,10 +34,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="grid min-h-screen grid-cols-[244px_1fr]">
       <aside className="flex flex-col border-r border-line bg-bg/60">
         <div className="flex h-14 items-center gap-2.5 border-b border-line px-5">
-          <span className="size-2.5 rounded-[3px] bg-accent" />
-          <span className="text-[15px] font-semibold tracking-tight">AdaRag</span>
+          <Logo size={20} />
+          <span className="font-display text-[15px] font-bold tracking-tight">AdaRag</span>
           <span className="ml-auto font-mono text-[10px] uppercase tracking-wider text-faint">
-            rag
+            strata
           </span>
         </div>
 
