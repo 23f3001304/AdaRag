@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 
 from chunking.base import Chunk, Chunker
@@ -15,6 +16,8 @@ from index.qdrant_hybrid import QdrantIndex, entity_filter
 from rerank.base import Reranker
 from retrieval.hybrid import HybridRetriever
 from retrieval.query_rewrite import QueryTransformer
+
+_ENRICH_CONCURRENCY = 6  # parallel enrichment LLM calls per ingest (bounds concurrent CLI procs)
 
 
 class IngestService:
@@ -77,22 +80,34 @@ class IngestService:
         return {"document_id": doc_id, "chunks": len(chunks), "source": source}
 
     async def _contexts(self, chunks: list[Chunk], document: str) -> list[str]:
-        """One situating context per chunk (empty when disabled, or when a single call fails)."""
+        """One situating context per chunk, enriched concurrently (empty when off or on failure)."""
         if self._enricher is None:
             return ["" for _ in chunks]
-        out: list[str] = []
-        for c in chunks:
-            try:
-                out.append(await self._enricher.context_for(c.text, document))
-            except Exception:  # a flaky enrichment call shouldn't abort a whole ingest
-                out.append("")
-        return out
+        sem = asyncio.Semaphore(_ENRICH_CONCURRENCY)
+
+        async def one(chunk: Chunk) -> str:
+            async with sem:
+                try:
+                    return await self._enricher.context_for(chunk.text, document)
+                except Exception:  # a flaky enrichment call shouldn't abort the whole ingest
+                    return ""
+
+        return list(await asyncio.gather(*(one(c) for c in chunks)))
 
     async def _metadata_for(self, chunks: list[Chunk]) -> list[ChunkMetadata]:
-        """One ChunkMetadata per chunk (empty when metadata enrichment is disabled)."""
+        """One ChunkMetadata per chunk, extracted concurrently (empty when disabled)."""
         if self._metadata is None:
             return [ChunkMetadata() for _ in chunks]
-        return [await self._metadata.extract(c.text) for c in chunks]
+        sem = asyncio.Semaphore(_ENRICH_CONCURRENCY)
+
+        async def one(chunk: Chunk) -> ChunkMetadata:
+            async with sem:
+                try:
+                    return await self._metadata.extract(chunk.text)
+                except Exception:
+                    return ChunkMetadata()
+
+        return list(await asyncio.gather(*(one(c) for c in chunks)))
 
     @staticmethod
     def _embed_text(context: str, text: str, terms: str) -> str:

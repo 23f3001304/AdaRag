@@ -1,6 +1,6 @@
 "use client";
 
-import { Boxes, CornerDownLeft, Paperclip, Sparkles, X } from "lucide-react";
+import { Boxes, CornerDownLeft, Paperclip, Sparkles, Square, X } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { Button } from "@/components/ui";
@@ -11,12 +11,14 @@ import type { Skill } from "@/lib/skills";
 export function ChatComposer({
   onSend,
   onPick,
+  onStop,
   skills,
   busy,
   placeholder = "ask a question, or type / for skills…",
 }: {
   onSend: (text: string, file: File | null) => Promise<void>;
   onPick: (target: Skill | "creator", description?: string) => void;
+  onStop: () => void;
   skills: Skill[];
   busy: boolean;
   placeholder?: string;
@@ -116,9 +118,15 @@ export function ChatComposer({
           placeholder={file ? "say 'ingest it' to add this file…" : placeholder}
           className="flex-1 rounded-md border border-line bg-bg px-3 py-2.5 text-sm text-fg outline-none placeholder:text-faint focus:border-line-2"
         />
-        <Button type="submit" disabled={busy}>
-          <CornerDownLeft size={14} /> Send
-        </Button>
+        {busy ? (
+          <Button type="button" variant="danger" onClick={onStop}>
+            <Square size={12} /> Stop
+          </Button>
+        ) : (
+          <Button type="submit">
+            <CornerDownLeft size={14} /> Send
+          </Button>
+        )}
       </form>
     </div>
   );

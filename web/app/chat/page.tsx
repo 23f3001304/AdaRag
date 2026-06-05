@@ -41,6 +41,8 @@ export default function ChatPage() {
   const [creating, setCreating] = useState(false);
   const [thinking, setThinking] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const stop = () => abortRef.current?.abort();
 
   useEffect(() => {
     api.listModes().then((r) => setModes(r.modes)).catch(() => {});
@@ -183,7 +185,9 @@ export default function ChatPage() {
         }
       }
       const skill = activeSkill ? { persona: activeSkill.persona, top_k: activeSkill.topK } : undefined;
-      const r = await api.chat(active.session, text, bucket, active.mode, skill, thinking);
+      const ctrl = new AbortController();
+      abortRef.current = ctrl;
+      const r = await api.chat(active.session, text, bucket, active.mode, skill, thinking, ctrl.signal);
       const seen = new Set<string>();
       const sources: Source[] = [];
       for (const c of r.citations) {
@@ -200,11 +204,15 @@ export default function ChatPage() {
         thinking: r.thinking ?? undefined,
       });
     } catch (e) {
-      const off = String(e).includes("Failed to fetch");
-      reply({
-        role: "assistant",
-        text: off ? "backend offline." : "request failed - is the CLI bridge running?",
-      });
+      if (e instanceof DOMException && e.name === "AbortError") {
+        reply({ role: "assistant", text: "_(stopped)_" });
+      } else {
+        const off = String(e).includes("Failed to fetch");
+        reply({
+          role: "assistant",
+          text: off ? "backend offline." : "request failed - is the CLI bridge running?",
+        });
+      }
     } finally {
       setBusy(false);
     }
@@ -246,6 +254,7 @@ export default function ChatPage() {
         <ChatComposer
           onSend={send}
           onPick={onPick}
+          onStop={stop}
           skills={skills}
           busy={busy}
           placeholder={creating ? "describe the skill you want…" : undefined}

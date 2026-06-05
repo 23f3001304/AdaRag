@@ -130,7 +130,12 @@ export const api = {
     mode?: ModeOption,
     skill?: SkillOverride,
     thinking = false,
-  ) => req<Answer>("/chat", json({ session_id: sessionId, message, bucket, mode, skill, thinking })),
+    signal?: AbortSignal,
+  ) =>
+    req<Answer>("/chat", {
+      ...json({ session_id: sessionId, message, bucket, mode, skill, thinking }),
+      signal,
+    }),
   route: (message: string) => req<{ intent: "ingest" | "ask" }>("/route", json({ message })),
   draftSkill: (description: string) =>
     req<{ name: string; persona: string; top_k: number }>("/skills/draft", json({ description })),
