@@ -1,8 +1,10 @@
 "use client";
 
-import { createContext, useCallback, useContext, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 
 import { api } from "@/lib/api";
+
+const KEY = "adarag.ingest";
 
 export type Stage = "idle" | "profile" | "chunk" | "embed" | "index" | "done" | "error";
 export interface IngestDoc {
@@ -46,6 +48,52 @@ export function IngestProvider({ children }: { children: React.ReactNode }) {
   const [stage, setStage] = useState<Stage>("idle");
   const [note, setNote] = useState("");
   const timers = useRef<number[]>([]);
+  const bucketRef = useRef("default");
+
+  // Survive a full refresh: rehydrate the last ingest, and if a refresh dropped an in-flight
+  // request, confirm against the backend (the file may have finished indexing server-side).
+  useEffect(() => {
+    let saved: { doc: IngestDoc | null; stage: Stage; note: string; bucket: string } | null = null;
+    try {
+      saved = JSON.parse(localStorage.getItem(KEY) ?? "null");
+    } catch {
+      saved = null;
+    }
+    if (!saved) return;
+    // Rehydrating persisted client state on mount is intended here; a lazy initializer would
+    // read localStorage during SSR and mismatch on hydration.
+    /* eslint-disable react-hooks/set-state-in-effect */
+    setDoc(saved.doc);
+    setStage(saved.stage);
+    setNote(saved.note);
+    /* eslint-enable react-hooks/set-state-in-effect */
+    bucketRef.current = saved.bucket;
+    if ((ORDER as readonly string[]).includes(saved.stage) && saved.doc) {
+      const source = saved.doc.source;
+      api
+        .listDocuments(saved.bucket)
+        .then((r) => {
+          const hit = r.documents.find((d) => d.source === source);
+          if (hit) {
+            setDoc((d) => (d ? { ...d, chunks: hit.chunks } : d));
+            setStage("done");
+          } else {
+            setNote("indexing was interrupted by the refresh - re-ingest if the file is missing.");
+          }
+        })
+        .catch(() => {});
+    }
+  }, []);
+
+  // Persist progress so a tab refresh keeps showing it (tab switches already survive in memory).
+  useEffect(() => {
+    if (stage === "idle" && !doc) return; // don't clobber a saved state with the empty initial
+    try {
+      localStorage.setItem(KEY, JSON.stringify({ doc, stage, note, bucket: bucketRef.current }));
+    } catch {
+      // best-effort: ignore quota/serialization errors
+    }
+  }, [doc, stage, note]);
 
   const animate = useCallback((d: IngestDoc, hold: boolean) => {
     timers.current.forEach(clearTimeout);
@@ -62,6 +110,7 @@ export function IngestProvider({ children }: { children: React.ReactNode }) {
 
   const ingest = useCallback(
     async (file: File, bucket: string) => {
+      bucketRef.current = bucket;
       const modality = inferModality(file.name);
       animate(
         {
