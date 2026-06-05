@@ -12,6 +12,7 @@ import contextlib
 import re
 from pathlib import Path
 
+from qdrant_client import models
 from sqlalchemy import delete as sa_delete
 
 from chunking.registry import build_chunker
@@ -142,7 +143,29 @@ class BucketManager:
         await self._qdrant.delete_collection(collection)
         self._cache.pop(bucket, None)
 
-    async def _scan(self, collection: str) -> tuple[set[str], set[str]]:
+    async def delete_document(self, bucket: str, source: str) -> None:
+        """Delete one source file from a bucket: its Qdrant points, Postgres rows, and upload."""
+        collection = collection_name(self._s.qdrant_collection, bucket)
+        flt = models.Filter(
+            must=[models.FieldCondition(key="source", match=models.MatchValue(value=source))]
+        )
+        doc_ids, paths = await self._scan(collection, flt)
+        for path in paths:
+            if _is_upload(path):
+                with contextlib.suppress(OSError):
+                    Path(path).unlink(missing_ok=True)
+        if doc_ids:
+            async with self._db.session() as session:
+                await session.execute(sa_delete(Document).where(Document.id.in_(doc_ids)))
+                await session.commit()
+        with contextlib.suppress(Exception):
+            await self._qdrant.delete(
+                collection_name=collection, points_selector=models.FilterSelector(filter=flt)
+            )
+
+    async def _scan(
+        self, collection: str, scroll_filter: models.Filter | None = None
+    ) -> tuple[set[str], set[str]]:
         """Collect doc_ids + original file paths from a collection's chunks (empty if missing)."""
         doc_ids: set[str] = set()
         paths: set[str] = set()
@@ -155,6 +178,7 @@ class BucketManager:
                     offset=offset,
                     with_payload=True,
                     with_vectors=False,
+                    scroll_filter=scroll_filter,
                 )
             except Exception:
                 break

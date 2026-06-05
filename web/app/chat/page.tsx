@@ -8,14 +8,20 @@ import { useBucket } from "@/components/bucket-context";
 import { ChatComposer } from "@/components/chat-composer";
 import { ChatList } from "@/components/chat-list";
 import { Logo } from "@/components/logo";
+import { type Resource, ResourceModal } from "@/components/resource-modal";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 
+interface Source {
+  source: string;
+  path: string | null;
+  modality: string;
+}
 interface Turn {
   role: "user" | "assistant";
   text: string;
   query?: string;
-  sources?: string[];
+  sources?: Source[];
   file?: string; // filename attached to a user turn
 }
 interface Chat {
@@ -38,6 +44,7 @@ export default function ChatPage() {
   const [chats, setChats] = useState<Chat[]>([]);
   const [activeId, setActiveId] = useState("");
   const [busy, setBusy] = useState(false);
+  const [preview, setPreview] = useState<Resource | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -104,7 +111,14 @@ export default function ChatPage() {
         }
       }
       const r = await api.chat(active.session, text, bucket);
-      const sources = [...new Set(r.citations.map((c) => c.source))].slice(0, 5);
+      const seen = new Set<string>();
+      const sources: Source[] = [];
+      for (const c of r.citations) {
+        if (seen.has(c.source)) continue;
+        seen.add(c.source);
+        sources.push({ source: c.source, path: c.original_path, modality: c.modality });
+        if (sources.length >= 5) break;
+      }
       reply({ role: "assistant", text: r.answer, query: r.search_query, sources });
     } catch (e) {
       const off = String(e).includes("Failed to fetch");
@@ -159,14 +173,25 @@ export default function ChatPage() {
                   {t.text && <p className="whitespace-pre-wrap text-sm leading-relaxed text-fg">{t.text}</p>}
                   {t.sources && t.sources.length > 0 && (
                     <div className="mt-1 flex flex-wrap gap-1.5">
-                      {t.sources.map((s) => (
-                        <span
-                          key={s}
-                          className="truncate rounded border border-line px-1.5 py-px font-mono text-[10px] text-muted"
-                        >
-                          {s}
-                        </span>
-                      ))}
+                      {t.sources.map((s) =>
+                        s.path ? (
+                          <button
+                            key={s.source}
+                            onClick={() => setPreview({ path: s.path!, name: s.source, modality: s.modality })}
+                            title="Open source"
+                            className="flex items-center gap-1 rounded border border-line px-1.5 py-px font-mono text-[10px] text-muted transition-colors hover:border-accent/50 hover:text-fg"
+                          >
+                            {s.source}
+                          </button>
+                        ) : (
+                          <span
+                            key={s.source}
+                            className="truncate rounded border border-line px-1.5 py-px font-mono text-[10px] text-muted"
+                          >
+                            {s.source}
+                          </span>
+                        ),
+                      )}
                     </div>
                   )}
                 </div>
@@ -192,6 +217,8 @@ export default function ChatPage() {
         </div>
         <ChatComposer onSend={send} busy={busy} />
       </div>
+
+      <ResourceModal resource={preview} onClose={() => setPreview(null)} />
     </div>
   );
 }

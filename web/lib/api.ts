@@ -54,6 +54,14 @@ export const api = {
   listBuckets: () => req<{ buckets: string[] }>("/buckets"),
   listDocuments: (bucket = "default") =>
     req<{ documents: DocumentInfo[] }>(`/documents?bucket=${encodeURIComponent(bucket)}`),
+  deleteDocument: (bucket: string, source: string) =>
+    req<{ bucket: string; source: string; status: string }>(
+      `/documents?source=${encodeURIComponent(source)}&bucket=${encodeURIComponent(bucket)}`,
+      { method: "DELETE" },
+    ),
+  // A direct URL to a preserved original (for <img>/<audio>/<video> or a download link).
+  fileUrl: (path: string, name?: string) =>
+    `${BASE}/files/raw?path=${encodeURIComponent(path)}${name ? `&name=${encodeURIComponent(name)}` : ""}`,
   createBucket: (name: string) =>
     req<{ bucket: string; status: string }>(`/buckets/${encodeURIComponent(name)}`, { method: "POST" }),
   deleteBucket: (name: string) =>

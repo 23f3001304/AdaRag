@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from api.buckets import router as buckets_router
 from api.chat import router as chat_router
 from api.documents import router as documents_router
+from api.files import router as files_router
 from api.health import router as health_router
 from api.ingest import router as ingest_router
 from api.query import router as query_router
@@ -54,6 +55,7 @@ app.include_router(chat_router)
 app.include_router(route_router)
 app.include_router(buckets_router)
 app.include_router(documents_router)
+app.include_router(files_router)
 
 
 @app.get("/")

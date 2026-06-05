@@ -1,9 +1,11 @@
 "use client";
 
-import { FileText, Image as ImageIcon, Music, RefreshCw, Video } from "lucide-react";
+import { Download, Eye, FileText, Image as ImageIcon, Music, RefreshCw, Trash2, Video } from "lucide-react";
 import { type ComponentType, useCallback, useEffect, useState } from "react";
 
 import { useBucket } from "@/components/bucket-context";
+import { Modal } from "@/components/modal";
+import { type Resource, ResourceModal } from "@/components/resource-modal";
 import { Button, Panel } from "@/components/ui";
 import { type DocumentInfo, api } from "@/lib/api";
 
@@ -19,11 +21,15 @@ const MOD_COLOR: Record<string, string> = {
   audio: "text-mod-audio",
   video: "text-mod-video",
 };
+const VIEWABLE = new Set(["image", "audio", "video"]);
 
 export default function FilesPage() {
   const { bucket } = useBucket();
   const [docs, setDocs] = useState<DocumentInfo[] | null>(null);
   const [error, setError] = useState("");
+  const [preview, setPreview] = useState<Resource | null>(null);
+  const [confirmDel, setConfirmDel] = useState<DocumentInfo | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(() => {
     setError("");
@@ -37,6 +43,20 @@ export default function FilesPage() {
       });
   }, [bucket]);
   useEffect(() => load(), [load]);
+
+  const doDelete = async () => {
+    if (!confirmDel || deleting) return;
+    setDeleting(true);
+    try {
+      await api.deleteDocument(bucket, confirmDel.source);
+      setConfirmDel(null);
+      load();
+    } catch {
+      /* keep the modal open on failure */
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const total = docs?.reduce((s, d) => s + d.chunks, 0) ?? 0;
 
@@ -56,10 +76,11 @@ export default function FilesPage() {
       </div>
 
       <Panel className="overflow-hidden">
-        <div className="grid grid-cols-[1fr_110px_80px] gap-4 border-b border-line px-5 py-2.5 font-mono text-[10px] uppercase tracking-wider text-faint">
+        <div className="grid grid-cols-[1fr_88px_56px_108px] gap-4 border-b border-line px-5 py-2.5 font-mono text-[10px] uppercase tracking-wider text-faint">
           <span>source</span>
           <span>modality</span>
           <span className="text-right">chunks</span>
+          <span />
         </div>
         {docs === null ? (
           <Empty>loading…</Empty>
@@ -74,10 +95,11 @@ export default function FilesPage() {
         ) : (
           docs.map((d) => {
             const Icon = MOD_ICON[d.modality] ?? FileText;
+            const path = d.original_path;
             return (
               <div
                 key={d.source}
-                className="grid grid-cols-[1fr_110px_80px] items-center gap-4 border-b border-line px-5 py-3 last:border-0 hover:bg-panel-2/40"
+                className="group grid grid-cols-[1fr_88px_56px_108px] items-center gap-4 border-b border-line px-5 py-3 last:border-0 hover:bg-panel-2/40"
               >
                 <span className="flex min-w-0 items-center gap-2.5">
                   <Icon size={15} className={MOD_COLOR[d.modality] ?? "text-mod-text"} />
@@ -85,11 +107,53 @@ export default function FilesPage() {
                 </span>
                 <span className="font-mono text-xs capitalize text-muted">{d.modality}</span>
                 <span className="text-right font-mono text-sm tabular-nums text-fg">{d.chunks}</span>
+                <span className="flex items-center justify-end gap-2.5 text-faint opacity-0 transition-opacity group-hover:opacity-100">
+                  {path && VIEWABLE.has(d.modality) && (
+                    <button
+                      title="Preview"
+                      onClick={() => setPreview({ path, name: d.source, modality: d.modality })}
+                      className="transition-colors hover:text-fg"
+                    >
+                      <Eye size={15} />
+                    </button>
+                  )}
+                  {path && (
+                    <a href={api.fileUrl(path, d.source)} download title="Download" className="transition-colors hover:text-fg">
+                      <Download size={15} />
+                    </a>
+                  )}
+                  <button
+                    title="Delete"
+                    onClick={() => setConfirmDel(d)}
+                    className="transition-colors hover:text-danger"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </span>
               </div>
             );
           })
         )}
       </Panel>
+
+      <ResourceModal resource={preview} onClose={() => setPreview(null)} />
+
+      <Modal open={confirmDel !== null} onClose={() => !deleting && setConfirmDel(null)}>
+        <h3 className="font-display text-lg font-bold text-fg">Delete file</h3>
+        <p className="mt-2 text-sm leading-relaxed text-muted">
+          Remove <span className="font-mono text-fg">{confirmDel?.source}</span> and its{" "}
+          {confirmDel?.chunks} chunk{confirmDel?.chunks === 1 ? "" : "s"} from this bucket, plus its
+          stored original. This cannot be undone.
+        </p>
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="ghost" onClick={() => setConfirmDel(null)} disabled={deleting}>
+            Cancel
+          </Button>
+          <Button variant="danger" onClick={doDelete} disabled={deleting}>
+            {deleting ? "Deleting…" : "Delete"}
+          </Button>
+        </div>
+      </Modal>
     </div>
   );
 }
