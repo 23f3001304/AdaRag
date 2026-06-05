@@ -24,6 +24,7 @@ export interface Answer {
   answer: string;
   citations: Citation[];
   search_query?: string;
+  thinking?: string | null;
 }
 
 export interface IngestResult {
@@ -127,7 +128,8 @@ export const api = {
     bucket = "default",
     mode?: ModeOption,
     skill?: SkillOverride,
-  ) => req<Answer>("/chat", json({ session_id: sessionId, message, bucket, mode, skill })),
+    thinking = false,
+  ) => req<Answer>("/chat", json({ session_id: sessionId, message, bucket, mode, skill, thinking })),
   route: (message: string) => req<{ intent: "ingest" | "ask" }>("/route", json({ message })),
   draftSkill: (description: string) =>
     req<{ name: string; persona: string; top_k: number }>("/skills/draft", json({ description })),

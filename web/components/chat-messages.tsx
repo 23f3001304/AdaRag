@@ -1,7 +1,8 @@
 "use client";
 
-import { Paperclip, User } from "lucide-react";
+import { Brain, ChevronDown, Paperclip, User } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
+import { useState } from "react";
 
 import { Logo } from "@/components/logo";
 import { MarkdownMessage } from "@/components/markdown-message";
@@ -19,6 +20,7 @@ export interface Turn {
   query?: string;
   sources?: Source[];
   file?: string;
+  thinking?: string;
 }
 
 export function ChatMessages({
@@ -62,6 +64,7 @@ export function ChatMessages({
                 ) : (
                   <p className="whitespace-pre-wrap text-sm leading-relaxed text-fg">{t.text}</p>
                 ))}
+              {t.thinking && <ThinkingBlock text={t.thinking} />}
               {t.sources && t.sources.length > 0 && (
                 <div className="mt-1 flex flex-wrap gap-1.5">
                   {t.sources.map((s) =>
@@ -105,6 +108,26 @@ export function ChatMessages({
         </div>
       )}
     </>
+  );
+}
+
+function ThinkingBlock({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mt-1">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-1 font-mono text-[10px] text-faint transition-colors hover:text-muted"
+      >
+        <Brain size={11} /> {open ? "hide thinking" : "thinking"}
+        <ChevronDown size={10} className={open ? "rotate-180 transition-transform" : "transition-transform"} />
+      </button>
+      {open && (
+        <div className="mt-1 whitespace-pre-wrap rounded-md border border-line bg-bg/50 p-2.5 text-xs italic leading-relaxed text-muted">
+          {text}
+        </div>
+      )}
+    </div>
   );
 }
 

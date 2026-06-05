@@ -73,6 +73,7 @@ class GenerateIn(BaseModel):
     system: str | None = None
     provider: str | None = None  # optional per-request override (chat model switching)
     model: str | None = None
+    thinking: bool = False  # ask reasoning models (ollama qwen3) to return their thinking
 
 
 class VisionIn(BaseModel):
@@ -202,6 +203,9 @@ async def put_config(body: ConfigIn) -> dict:
 async def generate(body: GenerateIn) -> dict:
     """Proxy a text generation to the host LLM CLI, optionally to a chosen provider+model."""
     llm = _llm_for(body.provider, body.model) if body.provider and body.model else _state.llm
+    if body.thinking and hasattr(llm, "generate_thinking"):
+        text, thinking = await llm.generate_thinking(body.prompt, system=body.system)
+        return {"text": text, "thinking": thinking}
     return {"text": await llm.generate(body.prompt, system=body.system)}
 
 

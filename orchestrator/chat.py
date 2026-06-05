@@ -68,25 +68,29 @@ class ChatOrchestrator:
         persona: str | None = None,
         top_k: int | None = None,
         llm: LLMProvider | None = None,
+        thinking: bool = False,
     ) -> dict:
         """Answer one turn in a session; rewrites follow-ups to standalone queries first.
 
-        A skill may pass a ``persona`` and ``top_k``; a chat mode may pass an ``llm`` to switch the
-        model. A greeting / small talk answers directly (no retrieval, citations, or search query).
+        A skill may pass a ``persona`` and ``top_k``; a mode may pass an ``llm``; ``thinking`` adds
+        the model's reasoning. A greeting answers directly (no retrieval, citations, or thinking).
         """
         gen = llm or self._llm
         history = self._sessions[session_id]
         if _is_chitchat(message):
             reply = (await gen.generate(_CHITCHAT_PROMPT.format(message=message))).strip()
             history.append((message, reply))
-            return {"answer": reply, "citations": [], "search_query": None}
+            return {"answer": reply, "citations": [], "search_query": None, "thinking": None}
         query = await self._contextualize(message, history, gen) if history else message
-        result = await self._answer.answer(query, persona=persona, top_k=top_k, llm=llm)
+        result = await self._answer.answer(
+            query, persona=persona, top_k=top_k, llm=llm, thinking=thinking
+        )
         history.append((message, result["answer"]))
         return {
             "answer": result["answer"],
             "citations": result["citations"],
             "search_query": query,  # surfaced so the rewrite is inspectable
+            "thinking": result.get("thinking"),
         }
 
     async def _contextualize(

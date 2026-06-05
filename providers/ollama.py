@@ -21,6 +21,13 @@ class OllamaLLM:
         )
         return resp["response"]
 
+    async def generate_thinking(self, prompt: str, *, system: str | None = None) -> tuple[str, str]:
+        """Generate with reasoning on (qwen3-style); returns (answer, thinking)."""
+        resp = await self._client.generate(
+            model=self.model, prompt=prompt, system=system or "", think=True
+        )
+        return resp["response"], resp.get("thinking") or ""
+
 
 class OllamaVision:
     """VisionProvider backed by a local Ollama multimodal model (e.g. qwen2.5vl, llava, moondream).

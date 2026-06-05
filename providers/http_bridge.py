@@ -50,15 +50,29 @@ class HttpBridgeLLM:
         self._provider = provider
         self._url = base_url.rstrip("/")
 
-    async def generate(self, prompt: str, *, system: str | None = None) -> str:
+    def _payload(self, prompt: str, system: str | None) -> dict:
         payload: dict = {"prompt": prompt, "system": system}
         if self._provider and self.model:
             payload["provider"] = self._provider
             payload["model"] = self.model
+        return payload
+
+    async def generate(self, prompt: str, *, system: str | None = None) -> str:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.post(f"{self._url}/generate", json=self._payload(prompt, system))
+            resp.raise_for_status()
+            return resp.json()["text"]
+
+    async def generate_thinking(
+        self, prompt: str, *, system: str | None = None
+    ) -> tuple[str, str | None]:
+        """Ask the bridge for the answer + the model's thinking (None when it has none)."""
+        payload = {**self._payload(prompt, system), "thinking": True}
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
             resp = await client.post(f"{self._url}/generate", json=payload)
             resp.raise_for_status()
-            return resp.json()["text"]
+            data = resp.json()
+            return data["text"], data.get("thinking") or None
 
 
 class HttpBridgeVision:

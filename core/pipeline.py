@@ -110,6 +110,27 @@ Question: {query}
 
 Answer:"""
 
+_REASON_PROMPT = """In 2-3 short sentences, explain how you reached this answer from the sources
+(which mattered, what you inferred). Be concise and do not repeat the answer.
+
+Question: {query}
+Answer: {answer}
+
+Reasoning:"""
+
+
+async def _answer_with_thinking(gen: LLMProvider, prompt: str, query: str) -> tuple[str, str]:
+    """Return (answer, thinking): the model's native reasoning if exposed, else a post-hoc trace."""
+    native = None
+    if hasattr(gen, "generate_thinking"):
+        answer, native = await gen.generate_thinking(prompt)
+    else:
+        answer = await gen.generate(prompt)
+    if native:
+        return answer, native
+    reason = (await gen.generate(_REASON_PROMPT.format(query=query, answer=answer))).strip()
+    return answer, reason
+
 
 class AnswerService:
     """Retrieve candidates, rerank them, and generate a cited answer from the top_k."""
@@ -137,6 +158,7 @@ class AnswerService:
         persona: str | None = None,
         top_k: int | None = None,
         llm: LLMProvider | None = None,
+        thinking: bool = False,
     ) -> dict:
         """Answer a query; a skill may override persona/top_k and a mode may override the LLM."""
         search = await self._transform.transform(query) if self._transform else query
@@ -149,12 +171,20 @@ class AnswerService:
         k = top_k if top_k and top_k > 0 else self._top_k
         hits = await self._reranker.rerank(query, candidates, k)
         if not hits:
-            return {"answer": "No documents have been ingested yet.", "citations": []}
+            return {
+                "answer": "No documents have been ingested yet.",
+                "citations": [],
+                "thinking": None,
+            }
         context = "\n\n".join(f"[{i + 1}] ({h.source}) {h.text}" for i, h in enumerate(hits))
         prompt = _ANSWER_PROMPT.format(context=context, query=query)
         if persona and persona.strip():
             prompt = f"{persona.strip()}\n\n{prompt}"
-        answer = await (llm or self._llm).generate(prompt)
+        gen = llm or self._llm
+        if thinking:
+            answer, think = await _answer_with_thinking(gen, prompt, query)
+        else:
+            answer, think = await gen.generate(prompt), None
         citations = [
             {
                 "n": i + 1,
@@ -166,4 +196,4 @@ class AnswerService:
             }
             for i, h in enumerate(hits)
         ]
-        return {"answer": answer.strip(), "citations": citations}
+        return {"answer": answer.strip(), "citations": citations, "thinking": think}

@@ -16,6 +16,7 @@ class ChatRequest(BaseModel):
     bucket: str = "default"
     skill: SkillOverride | None = None
     mode: ModeOverride | None = None
+    thinking: bool = False
 
 
 @router.post("/chat")
@@ -31,4 +32,5 @@ async def chat(request: Request, body: ChatRequest) -> dict:
         persona=skill.persona if skill else None,
         top_k=skill.top_k if skill else None,
         llm=llm,
+        thinking=body.thinking,
     )

@@ -1,6 +1,6 @@
 "use client";
 
-import { Boxes, X } from "lucide-react";
+import { Boxes, Brain, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { useBucket } from "@/components/bucket-context";
@@ -10,6 +10,7 @@ import { ChatMessages, type Source, type Turn } from "@/components/chat-messages
 import { ModePicker } from "@/components/mode-picker";
 import { type Resource, ResourceModal } from "@/components/resource-modal";
 import { type ModeOption, api } from "@/lib/api";
+import { cn } from "@/lib/cn";
 import { loadSkills, saveSkills, type Skill } from "@/lib/skills";
 
 interface Chat {
@@ -38,6 +39,7 @@ export default function ChatPage() {
   const [skills, setSkills] = useState<Skill[]>([]);
   const [activeSkill, setActiveSkill] = useState<Skill | null>(null);
   const [creating, setCreating] = useState(false);
+  const [thinking, setThinking] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -146,7 +148,7 @@ export default function ChatPage() {
         }
       }
       const skill = activeSkill ? { persona: activeSkill.persona, top_k: activeSkill.topK } : undefined;
-      const r = await api.chat(active.session, text, bucket, active.mode, skill);
+      const r = await api.chat(active.session, text, bucket, active.mode, skill, thinking);
       const seen = new Set<string>();
       const sources: Source[] = [];
       for (const c of r.citations) {
@@ -155,7 +157,13 @@ export default function ChatPage() {
         sources.push({ source: c.source, path: c.original_path, modality: c.modality });
         if (sources.length >= 5) break;
       }
-      reply({ role: "assistant", text: r.answer, query: r.search_query, sources });
+      reply({
+        role: "assistant",
+        text: r.answer,
+        query: r.search_query,
+        sources,
+        thinking: r.thinking ?? undefined,
+      });
     } catch (e) {
       const off = String(e).includes("Failed to fetch");
       reply({
@@ -178,9 +186,23 @@ export default function ChatPage() {
             {activeSkill && <Chip onClear={() => setActiveSkill(null)}>{activeSkill.name}</Chip>}
             {creating && <Chip onClear={() => setCreating(false)}>creating skill…</Chip>}
           </div>
-          <span className="font-mono text-[10px] text-faint">
-            bucket: <span className="text-muted">{bucket}</span>
-          </span>
+          <div className="flex shrink-0 items-center gap-3">
+            <button
+              onClick={() => setThinking((t) => !t)}
+              title="Show the model's reasoning under each answer"
+              className={cn(
+                "flex items-center gap-1 rounded-md border px-2 py-1 font-mono text-[10px] transition-colors",
+                thinking
+                  ? "border-accent/50 bg-accent/10 text-accent"
+                  : "border-line text-faint hover:text-muted",
+              )}
+            >
+              <Brain size={11} /> thinking
+            </button>
+            <span className="font-mono text-[10px] text-faint">
+              bucket: <span className="text-muted">{bucket}</span>
+            </span>
+          </div>
         </div>
         <div className="flex-1 space-y-5 overflow-y-auto p-6">
           <ChatMessages turns={active?.turns ?? []} busy={busy} bucket={bucket} onPreview={setPreview} />
