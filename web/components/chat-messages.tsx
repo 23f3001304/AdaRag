@@ -134,9 +134,10 @@ function StreamingText({ text, live }: { text: string; live: boolean }) {
       const s = shownRef.current;
       const len = lenRef.current;
       if (s < len) {
-        // Cap the per-frame step so a big delta types out steadily instead of popping in.
-        // ~4 chars/frame at 60fps is a smooth typewriter that still keeps up with the stream.
-        const step = Math.min(4, Math.max(1, Math.ceil((len - s) / 10)));
+        // Reveal a few chars per frame, staying slightly behind the stream so it types
+        // continuously instead of draining each delta then pausing for the next one (the
+        // "yonk yonk" stutter). A big backlog catches up faster; it never dumps.
+        const step = Math.max(1, Math.min(6, Math.ceil((len - s) / 20)));
         const next = Math.min(len, s + step);
         shownRef.current = next;
         setShown(next);
@@ -152,7 +153,15 @@ function StreamingText({ text, live }: { text: string; live: boolean }) {
     };
   }, []);
 
-  return <MarkdownMessage text={animate.current ? text.slice(0, shown) : text} />;
+  // While typing, render plain text: a cheap text-node update holds a smooth 60fps, whereas
+  // re-parsing markdown every frame is what made the reveal stutter. Markdown formats once the
+  // answer has fully arrived (for prose with [n] citations the two look identical anyway).
+  if (animate.current && (live || shown < text.length)) {
+    return (
+      <p className="whitespace-pre-wrap text-sm leading-relaxed text-fg">{text.slice(0, shown)}</p>
+    );
+  }
+  return <MarkdownMessage text={text} />;
 }
 
 function ThinkingBlock({ text, live }: { text: string; live: boolean }) {
