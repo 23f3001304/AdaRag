@@ -97,7 +97,7 @@ export default function FilesPage() {
         ) : (
           docs.map((d) => {
             const Icon = MOD_ICON[d.modality] ?? FileText;
-            const path = d.original_path;
+            const path = d.original_exists ? d.original_path : null;
             return (
               <div
                 key={d.source}
@@ -109,36 +109,46 @@ export default function FilesPage() {
                 </span>
                 <span className="font-mono text-xs capitalize text-muted">{d.modality}</span>
                 <span className="text-right font-mono text-sm tabular-nums text-fg">{d.chunks}</span>
-                <span className="flex items-center justify-end gap-2.5 text-faint opacity-0 transition-opacity group-hover:opacity-100">
-                  {path && VIEWABLE.has(d.modality) && (
-                    <button
-                      title="Preview"
-                      onClick={() => setPreview({ path, name: d.source, modality: d.modality })}
-                      className="transition-colors hover:text-fg"
+                <span className="flex items-center justify-end gap-2.5">
+                  {d.original_path && !d.original_exists && (
+                    <span
+                      className="font-mono text-[9px] text-faint"
+                      title="the original was not stored - re-ingest to restore it"
                     >
-                      <Eye size={15} />
-                    </button>
+                      missing
+                    </span>
                   )}
-                  {path && (
+                  <span className="flex items-center gap-2.5 text-faint opacity-0 transition-opacity group-hover:opacity-100">
+                    {path && VIEWABLE.has(d.modality) && (
+                      <button
+                        title="Preview"
+                        onClick={() => setPreview({ path, name: d.source, modality: d.modality })}
+                        className="transition-colors hover:text-fg"
+                      >
+                        <Eye size={15} />
+                      </button>
+                    )}
+                    {path && (
+                      <button
+                        title="Download"
+                        onClick={() =>
+                          downloadFile(path, d.source).catch((e) =>
+                            setNote(`${d.source}: ${e instanceof Error ? e.message : e}`),
+                          )
+                        }
+                        className="transition-colors hover:text-fg"
+                      >
+                        <Download size={15} />
+                      </button>
+                    )}
                     <button
-                      title="Download"
-                      onClick={() =>
-                        downloadFile(path, d.source).catch((e) =>
-                          setNote(`${d.source}: ${e instanceof Error ? e.message : e}`),
-                        )
-                      }
-                      className="transition-colors hover:text-fg"
+                      title="Delete"
+                      onClick={() => setConfirmDel(d)}
+                      className="transition-colors hover:text-danger"
                     >
-                      <Download size={15} />
+                      <Trash2 size={14} />
                     </button>
-                  )}
-                  <button
-                    title="Delete"
-                    onClick={() => setConfirmDel(d)}
-                    className="transition-colors hover:text-danger"
-                  >
-                    <Trash2 size={14} />
-                  </button>
+                  </span>
                 </span>
               </div>
             );

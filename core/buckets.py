@@ -267,4 +267,8 @@ class BucketManager:
                 row["chunks"] += 1
             if offset is None:
                 break
-        return sorted(agg.values(), key=lambda r: r["source"])
+        rows = sorted(agg.values(), key=lambda r: r["source"])
+        for row in rows:
+            path = row.get("original_path")
+            row["original_exists"] = bool(path) and _is_upload(path) and Path(path).exists()
+        return rows

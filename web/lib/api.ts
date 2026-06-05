@@ -38,6 +38,7 @@ export interface DocumentInfo {
   modality: string;
   original_path: string | null;
   chunks: number;
+  original_exists?: boolean;
 }
 
 // Answer-time overrides carried by an applied skill (persona framing + retrieval depth).
