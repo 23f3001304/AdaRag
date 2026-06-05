@@ -10,6 +10,7 @@ interface BucketState {
   buckets: string[];
   refresh: () => void;
   create: (name: string) => Promise<void>;
+  remove: (name: string) => Promise<void>;
 }
 
 const Ctx = createContext<BucketState | null>(null);
@@ -52,7 +53,20 @@ export function BucketProvider({ children }: { children: React.ReactNode }) {
     [setBucket],
   );
 
+  const remove = useCallback(async (name: string) => {
+    await api.deleteBucket(name);
+    const res = await api.listBuckets();
+    setBuckets(res.buckets.length ? res.buckets : ["default"]);
+    setBucketState((curr) => {
+      const next = curr === name ? "default" : curr;
+      localStorage.setItem("adarag.bucket", next);
+      return next;
+    });
+  }, []);
+
   return (
-    <Ctx.Provider value={{ bucket, setBucket, buckets, refresh, create }}>{children}</Ctx.Provider>
+    <Ctx.Provider value={{ bucket, setBucket, buckets, refresh, create, remove }}>
+      {children}
+    </Ctx.Provider>
   );
 }

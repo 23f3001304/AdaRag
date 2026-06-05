@@ -8,11 +8,16 @@ built once and shared; only the index (and its bound services) are per-bucket an
 
 from __future__ import annotations
 
+import contextlib
 import re
+from pathlib import Path
+
+from sqlalchemy import delete as sa_delete
 
 from chunking.registry import build_chunker
 from core.config import Settings
 from core.db import Database
+from core.models import Document
 from core.pipeline import AnswerService, IngestService
 from enrichment.contextual import ContextualEnricher
 from enrichment.metadata import MetadataEnricher
@@ -37,6 +42,17 @@ def bucket_slug(name: str) -> str:
 def collection_name(base: str, bucket: str) -> str:
     """The Qdrant collection for a bucket; the default bucket keeps the base collection name."""
     return base if bucket == DEFAULT_BUCKET else f"{base}_{bucket_slug(bucket)}"
+
+
+_UPLOADS = Path("data/uploads")
+
+
+def _is_upload(path: str) -> bool:
+    """True only for files under data/uploads (a bucket's own uploads, safe to remove)."""
+    try:
+        return _UPLOADS.resolve() in Path(path).resolve().parents
+    except OSError:
+        return False
 
 
 class BucketServices:
@@ -104,11 +120,47 @@ class BucketManager:
         return bucket_slug(bucket) if bucket != DEFAULT_BUCKET else DEFAULT_BUCKET
 
     async def delete(self, bucket: str) -> None:
-        """Drop a bucket's collection and evict its cached services (the default is protected)."""
+        """Delete a bucket fully: its Qdrant collection, uploaded originals, and Postgres rows."""
         if bucket == DEFAULT_BUCKET:
             raise ValueError("the default bucket cannot be deleted")
-        await self._qdrant.delete_collection(collection_name(self._s.qdrant_collection, bucket))
+        collection = collection_name(self._s.qdrant_collection, bucket)
+        doc_ids, paths = await self._scan(collection)
+        for path in paths:
+            if _is_upload(path):
+                with contextlib.suppress(OSError):
+                    Path(path).unlink(missing_ok=True)
+        if doc_ids:
+            async with self._db.session() as session:
+                await session.execute(sa_delete(Document).where(Document.id.in_(doc_ids)))
+                await session.commit()
+        await self._qdrant.delete_collection(collection)
         self._cache.pop(bucket, None)
+
+    async def _scan(self, collection: str) -> tuple[set[str], set[str]]:
+        """Collect doc_ids + original file paths from a collection's chunks (empty if missing)."""
+        doc_ids: set[str] = set()
+        paths: set[str] = set()
+        offset = None
+        while True:
+            try:
+                points, offset = await self._qdrant.scroll(
+                    collection_name=collection,
+                    limit=256,
+                    offset=offset,
+                    with_payload=True,
+                    with_vectors=False,
+                )
+            except Exception:
+                break
+            for point in points:
+                payload = point.payload or {}
+                if payload.get("doc_id"):
+                    doc_ids.add(str(payload["doc_id"]))
+                if payload.get("original_path"):
+                    paths.add(str(payload["original_path"]))
+            if offset is None:
+                break
+        return doc_ids, paths
 
     async def list_buckets(self) -> list[str]:
         """All buckets that have a collection, by name (the base collection shows as 'default')."""
