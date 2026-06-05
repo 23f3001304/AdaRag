@@ -14,18 +14,33 @@ import httpx
 _TIMEOUT = 180.0  # CLI round-trips are slow (seconds); keep the HTTP client patient
 
 
-class HttpBridgeLLM:
-    """LLMProvider that proxies generate() to a host CLI bridge over HTTP."""
+async def bridge_models(base_url: str) -> list[dict]:
+    """Ask a bridge which provider+model combos are available on its host."""
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.get(f"{base_url.rstrip('/')}/models")
+        resp.raise_for_status()
+        return resp.json().get("modes", [])
 
-    def __init__(self, base_url: str, model: str = "") -> None:
+
+class HttpBridgeLLM:
+    """LLMProvider that proxies generate() to a host CLI bridge over HTTP.
+
+    With a ``provider``, the bridge routes to that specific provider+model (chat model switching);
+    without one it uses the bridge's default host LLM.
+    """
+
+    def __init__(self, base_url: str, model: str = "", provider: str = "") -> None:
         self.model = model
+        self._provider = provider
         self._url = base_url.rstrip("/")
 
     async def generate(self, prompt: str, *, system: str | None = None) -> str:
+        payload: dict = {"prompt": prompt, "system": system}
+        if self._provider and self.model:
+            payload["provider"] = self._provider
+            payload["model"] = self.model
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-            resp = await client.post(
-                f"{self._url}/generate", json={"prompt": prompt, "system": system}
-            )
+            resp = await client.post(f"{self._url}/generate", json=payload)
             resp.raise_for_status()
             return resp.json()["text"]
 
