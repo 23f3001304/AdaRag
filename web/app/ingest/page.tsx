@@ -1,3 +1,4 @@
+import { ClarificationPanel } from "@/components/clarification-panel";
 import { IngestVisual } from "@/components/ingest-visual";
 
 export default function IngestPage() {
@@ -10,6 +11,7 @@ export default function IngestPage() {
           bucket&apos;s vector space. Text, images, audio, and video all route through the same flow.
         </p>
       </div>
+      <ClarificationPanel />
       <IngestVisual />
     </div>
   );

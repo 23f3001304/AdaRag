@@ -180,8 +180,28 @@ export async function chatStream(
   }
 }
 
+// A pending ingest-time disambiguation: a file whose subject the detector couldn't name.
+export interface Clarification {
+  id: string;
+  bucket: string;
+  source: string;
+  modality: string;
+  subject: string;
+  question: string;
+  candidates: string[];
+  status: string;
+}
+
 export const api = {
   health: () => req<{ status: string; services: Record<string, boolean> }>("/health"),
+  listClarifications: (bucket?: string) =>
+    req<{ clarifications: Clarification[] }>(
+      `/clarifications${bucket ? `?bucket=${encodeURIComponent(bucket)}` : ""}`,
+    ),
+  answerClarification: (id: string, entity: string) =>
+    req<{ ok: boolean; chunks_updated: number }>(`/clarifications/${id}/answer`, json({ entity })),
+  dismissClarification: (id: string) =>
+    req<{ ok: boolean }>(`/clarifications/${id}/dismiss`, { method: "POST" }),
   listBuckets: () => req<{ buckets: string[] }>("/buckets"),
   listDocuments: (bucket = "default") =>
     req<{ documents: DocumentInfo[] }>(`/documents?bucket=${encodeURIComponent(bucket)}`),

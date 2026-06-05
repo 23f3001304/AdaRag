@@ -19,6 +19,8 @@ import { type ComponentType, useEffect, useState } from "react";
 
 import { BridgeControl } from "@/components/bridge-control";
 import { BucketSwitcher } from "@/components/bucket-switcher";
+import { useClarifications } from "@/components/clarification-context";
+import { ClarificationToast } from "@/components/clarification-toast";
 import { Logo } from "@/components/logo";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
@@ -41,6 +43,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [online, setOnline] = useState<boolean | null>(null);
   const active = NAV.find((n) => n.href === pathname) ?? NAV[0];
+  const pending = useClarifications().items.length;
 
   useEffect(() => {
     let live = true;
@@ -112,6 +115,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     soon
                   </span>
                 )}
+                {href === "/ingest" &&
+                  pending > 0 &&
+                  (collapsed ? (
+                    <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-accent" />
+                  ) : (
+                    <span className="ml-auto flex min-w-[18px] items-center justify-center rounded-full bg-accent px-1 py-0.5 text-[10px] font-bold leading-none text-bg">
+                      {pending}
+                    </span>
+                  ))}
               </Link>
             );
           })}
@@ -177,6 +189,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </header>
         <main className="flex-1 overflow-y-auto px-7 py-7">{children}</main>
       </div>
+      <ClarificationToast />
     </div>
   );
 }
