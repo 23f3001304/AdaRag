@@ -121,3 +121,36 @@ class BucketManager:
             elif col.name.startswith(prefix):
                 names.append(col.name[len(prefix):])
         return sorted(names)
+
+    async def documents(self, bucket: str) -> list[dict]:
+        """Aggregate a bucket's indexed chunks by source - one row per ingested file."""
+        collection = collection_name(self._s.qdrant_collection, bucket)
+        agg: dict[str, dict] = {}
+        offset = None
+        while True:
+            try:
+                points, offset = await self._qdrant.scroll(
+                    collection_name=collection,
+                    limit=256,
+                    offset=offset,
+                    with_payload=True,
+                    with_vectors=False,
+                )
+            except Exception:
+                break  # the collection may not exist yet
+            for point in points:
+                payload = point.payload or {}
+                source = str(payload.get("source", "unknown"))
+                row = agg.setdefault(
+                    source,
+                    {
+                        "source": source,
+                        "modality": payload.get("modality", "text"),
+                        "original_path": payload.get("original_path"),
+                        "chunks": 0,
+                    },
+                )
+                row["chunks"] += 1
+            if offset is None:
+                break
+        return sorted(agg.values(), key=lambda r: r["source"])

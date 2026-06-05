@@ -1,5 +1,6 @@
 import { FileText, Image as ImageIcon, Music, Video, Zap } from "lucide-react";
 
+import { InteractiveGrid } from "@/components/fx/interactive-grid";
 import { Panel, Stat } from "@/components/ui";
 
 const INGEST = ["Profile", "Chunk", "Enrich", "Embed", "Index"];
@@ -15,18 +16,21 @@ const MODALITIES = [
 export default function Overview() {
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-7">
-      <section className="grid-field relative overflow-hidden rounded-xl border border-line px-8 py-11">
-        <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-accent">
-          adaptive multimodal rag
-        </p>
-        <h2 className="mt-3 max-w-2xl font-display text-[2.7rem] font-normal leading-[1.08] tracking-tight text-fg">
-          Profile every file, route it to the right pipeline, and{" "}
-          <span className="font-extrabold">self-tune against cost</span>.
-        </h2>
-        <p className="mt-5 max-w-xl text-sm leading-relaxed text-muted">
-          Hybrid retrieval over text, images, audio, and video. Isolated buckets, a conversational
-          orchestrator, and an Optuna optimizer that maps relevance against latency.
-        </p>
+      <section className="relative overflow-hidden rounded-xl border border-line px-8 py-12">
+        <InteractiveGrid className="pointer-events-none absolute inset-0 size-full [mask-image:linear-gradient(to_right,transparent,black_60%)]" />
+        <div className="relative">
+          <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-accent">
+            adaptive multimodal rag
+          </p>
+          <h2 className="mt-3 max-w-2xl font-display text-[2.7rem] font-normal leading-[1.08] tracking-tight text-fg">
+            Profile every file, route it to the right pipeline, and{" "}
+            <span className="font-extrabold">self-tune against cost</span>.
+          </h2>
+          <p className="mt-5 max-w-xl text-sm leading-relaxed text-muted">
+            Hybrid retrieval over text, images, audio, and video. Isolated buckets, a conversational
+            orchestrator, and an Optuna optimizer that maps relevance against latency.
+          </p>
+        </div>
       </section>
 
       <Panel className="px-7 py-6">

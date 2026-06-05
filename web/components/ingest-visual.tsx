@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { Fragment, useCallback, useRef, useState } from "react";
 
 import { Button } from "@/components/ui";
+import { VectorField } from "@/components/vector-field";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 
@@ -34,28 +35,12 @@ const SAMPLE: Doc = {
   profile: "paper",
 };
 
-const MOD_DOT: Record<string, string> = {
-  text: "fill-mod-text",
-  image: "fill-mod-image",
-  audio: "fill-mod-audio",
-  video: "fill-mod-video",
-};
-
 function inferModality(name: string): string {
   const ext = name.split(".").pop()?.toLowerCase() ?? "";
   if (["png", "jpg", "jpeg", "webp", "gif", "bmp"].includes(ext)) return "image";
   if (["wav", "mp3", "m4a", "flac", "ogg"].includes(ext)) return "audio";
   if (["mp4", "mov", "mkv", "webm", "avi"].includes(ext)) return "video";
   return "text";
-}
-
-/** Phyllotaxis spiral - an even, organic cluster centered in the 100x100 field. */
-function scatter(n: number) {
-  return Array.from({ length: n }, (_, i) => {
-    const angle = i * 2.399963;
-    const radius = 7 + 37 * Math.sqrt((i + 0.5) / n);
-    return { x: 50 + Math.cos(angle) * radius, y: 50 + Math.sin(angle) * radius };
-  });
 }
 
 export function IngestVisual({ bucket = "default" }: { bucket?: string }) {
@@ -186,20 +171,13 @@ export function IngestVisual({ bucket = "default" }: { bucket?: string }) {
           <span className="font-mono text-[10px] uppercase tracking-wider text-faint">
             vector space · bge-m3 · 1024d
           </span>
-          <svg viewBox="0 0 100 100" className="mt-2 h-[220px] w-full">
-            {doc &&
-              idx >= 2 &&
-              scatter(Math.min(doc.chunks, 40)).map((p, i) => (
-                <motion.circle
-                  key={i}
-                  r={1.5}
-                  className={MOD_DOT[doc.modality] ?? "fill-mod-text"}
-                  initial={{ cx: 50, cy: 50, opacity: 0 }}
-                  animate={{ cx: p.x, cy: p.y, opacity: stage === "done" ? 0.95 : 0.55 }}
-                  transition={{ delay: i * 0.02, type: "spring", stiffness: 55, damping: 13 }}
-                />
-              ))}
-          </svg>
+          <div className="mt-2 flex flex-1">
+            <VectorField
+              count={doc?.chunks ?? 0}
+              modality={doc?.modality ?? "text"}
+              active={!!doc && idx >= 2}
+            />
+          </div>
         </div>
       </div>
 

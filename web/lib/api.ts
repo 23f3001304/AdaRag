@@ -32,12 +32,21 @@ export interface IngestResult {
   source: string;
 }
 
+export interface DocumentInfo {
+  source: string;
+  modality: string;
+  original_path: string | null;
+  chunks: number;
+}
+
 function json(body: unknown): RequestInit {
   return { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) };
 }
 
 export const api = {
   listBuckets: () => req<{ buckets: string[] }>("/buckets"),
+  listDocuments: (bucket = "default") =>
+    req<{ documents: DocumentInfo[] }>(`/documents?bucket=${encodeURIComponent(bucket)}`),
   createBucket: (name: string) =>
     req<{ bucket: string; status: string }>(`/buckets/${encodeURIComponent(name)}`, { method: "POST" }),
   deleteBucket: (name: string) =>
