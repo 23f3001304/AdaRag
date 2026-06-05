@@ -4,7 +4,7 @@ import { Loader2, Save } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Button, Panel } from "@/components/ui";
-import { type ProviderConfig, api } from "@/lib/api";
+import { type ModeOption, type ProviderConfig, api } from "@/lib/api";
 
 const LLM_PROVIDERS = ["claude-cli", "gemini-cli", "ollama", "anthropic", "openai", "openrouter"];
 const VISION_PROVIDERS = ["claude-cli", "gemini-cli", "ollama"];
@@ -29,6 +29,7 @@ export default function SettingsPage() {
   const [keys, setKeys] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [modes, setModes] = useState<ModeOption[]>([]);
 
   useEffect(() => {
     api
@@ -38,9 +39,14 @@ export default function SettingsPage() {
         setDraft(Object.fromEntries(EDITABLE.map((f) => [f, c[f]])));
       })
       .catch(() => setResult({ ok: false, msg: "Could not load config - is the bridge running?" }));
+    api
+      .listModes()
+      .then((r) => setModes(r.modes))
+      .catch(() => {});
   }, []);
 
   const set = (k: string, v: string) => setDraft((d) => ({ ...d, [k]: v }));
+  const modelsFor = (p: string) => [...new Set(modes.filter((m) => m.provider === p).map((m) => m.model))];
 
   const save = async () => {
     setSaving(true);
@@ -89,7 +95,17 @@ export default function SettingsPage() {
                 <Select value={draft.llm_provider} options={LLM_PROVIDERS} onChange={(v) => set("llm_provider", v)} />
               </Field>
               <Field label="model">
-                <input className={input} value={draft.llm_model} onChange={(e) => set("llm_model", e.target.value)} />
+                <input
+                  list="llm-models"
+                  className={input}
+                  value={draft.llm_model}
+                  onChange={(e) => set("llm_model", e.target.value)}
+                />
+                <datalist id="llm-models">
+                  {modelsFor(draft.llm_provider).map((m) => (
+                    <option key={m} value={m} />
+                  ))}
+                </datalist>
               </Field>
             </div>
             <SectionTitle>Vision</SectionTitle>
@@ -98,7 +114,17 @@ export default function SettingsPage() {
                 <Select value={draft.vision_provider} options={VISION_PROVIDERS} onChange={(v) => set("vision_provider", v)} />
               </Field>
               <Field label="model">
-                <input className={input} value={draft.vision_model} onChange={(e) => set("vision_model", e.target.value)} />
+                <input
+                  list="vision-models"
+                  className={input}
+                  value={draft.vision_model}
+                  onChange={(e) => set("vision_model", e.target.value)}
+                />
+                <datalist id="vision-models">
+                  {modelsFor(draft.vision_provider).map((m) => (
+                    <option key={m} value={m} />
+                  ))}
+                </datalist>
               </Field>
               <Field label="ocr">
                 <Select value={draft.ocr_provider} options={OCR_PROVIDERS} onChange={(v) => set("ocr_provider", v)} />
