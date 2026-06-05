@@ -18,7 +18,7 @@ from sqlalchemy import delete as sa_delete
 from chunking.registry import build_chunker
 from core.config import Settings
 from core.db import Database
-from core.interfaces import LLMProvider
+from core.interfaces import EmbeddingProvider, LLMProvider
 from core.models import Document
 from core.pipeline import AnswerService, IngestService
 from enrichment.contextual import ContextualEnricher
@@ -97,6 +97,16 @@ class BucketManager:
     def llm(self) -> LLMProvider:
         """The shared LLM (reused for bucket-independent tasks like chat intent routing)."""
         return self._llm
+
+    @property
+    def embedder(self) -> EmbeddingProvider:
+        """The shared embedder (reused by the optimizer to score a bucket's retrieval)."""
+        return self._embedder
+
+    @property
+    def reranker(self) -> CrossEncoderReranker:
+        """The shared cross-encoder reranker (reused by the optimizer)."""
+        return self._reranker
 
     def _index(self, bucket: str) -> QdrantIndex:
         return QdrantIndex(self._qdrant, collection_name(self._s.qdrant_collection, bucket))

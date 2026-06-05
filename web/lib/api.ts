@@ -45,6 +45,25 @@ export interface SkillOverride {
   top_k?: number;
 }
 
+export interface TrialPoint {
+  k: number;
+  ndcg: number;
+  ms: number;
+}
+
+export interface StudyState {
+  status: "idle" | "starting" | "building_queries" | "running" | "done" | "error";
+  bucket?: string;
+  queries?: number;
+  trials_done?: number;
+  trials_total?: number;
+  trials?: TrialPoint[];
+  baseline?: TrialPoint;
+  front?: TrialPoint[];
+  headline?: string;
+  error?: string;
+}
+
 function json(body: unknown): RequestInit {
   return { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) };
 }
@@ -71,6 +90,9 @@ export const api = {
   chat: (sessionId: string, message: string, bucket = "default", skill?: SkillOverride) =>
     req<Answer>("/chat", json({ session_id: sessionId, message, bucket, skill })),
   route: (message: string) => req<{ intent: "ingest" | "ask" }>("/route", json({ message })),
+  optimizeRun: (bucket: string, trials = 20, max_queries = 12) =>
+    req<{ started: boolean; running: boolean }>("/optimize/run", json({ bucket, trials, max_queries })),
+  optimizeStatus: () => req<StudyState>("/optimize/status"),
   ingest: (file: File, bucket = "default") => {
     const form = new FormData();
     form.append("file", file);

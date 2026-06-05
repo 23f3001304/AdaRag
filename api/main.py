@@ -12,6 +12,7 @@ from api.documents import router as documents_router
 from api.files import router as files_router
 from api.health import router as health_router
 from api.ingest import router as ingest_router
+from api.optimize import router as optimize_router
 from api.query import router as query_router
 from api.route import router as route_router
 from core.buckets import BucketManager
@@ -21,6 +22,7 @@ from index.qdrant_client import create_qdrant
 from ingestion.registry import build_registry
 from orchestrator.router import IntentRouter
 from providers.factory import ProviderFactory
+from tuning.study import StudyRunner
 
 
 @asynccontextmanager
@@ -40,6 +42,7 @@ async def lifespan(app: FastAPI):
     buckets = BucketManager(qdrant, db, settings, providers)
     app.state.buckets = buckets
     app.state.router = IntentRouter(buckets.llm)  # bucket-independent chat intent classifier
+    app.state.study = StudyRunner(buckets, qdrant, settings)  # frontend-triggered tuning study
     try:
         yield
     finally:
@@ -56,6 +59,7 @@ app.include_router(route_router)
 app.include_router(buckets_router)
 app.include_router(documents_router)
 app.include_router(files_router)
+app.include_router(optimize_router)
 
 
 @app.get("/")

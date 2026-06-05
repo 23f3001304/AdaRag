@@ -10,6 +10,7 @@ with the pool, while recall saturates — so there is a real knee to find.
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import optuna
@@ -61,8 +62,16 @@ class PipelineOptimizer:
         latency_ms = (time.perf_counter() - start) / max(1, len(self._qa)) * 1000
         return TrialResult(rerank_candidates, scores.ndcg, latency_ms)
 
-    async def optimize(self, n_trials: int, seed: int = 7) -> list[TrialResult]:
-        """Run an Optuna multi-objective search; returns every evaluated trial."""
+    async def optimize(
+        self,
+        n_trials: int,
+        seed: int = 7,
+        on_trial: Callable[[TrialResult, int], None] | None = None,
+    ) -> list[TrialResult]:
+        """Run an Optuna multi-objective search; returns every evaluated trial.
+
+        ``on_trial(result, completed)`` is invoked after each trial for live progress reporting.
+        """
         await self.evaluate(self._max)  # warm up GPU/models so the first real timing isn't skewed
         study = optuna.create_study(
             directions=["maximize", "minimize"],
@@ -75,6 +84,8 @@ class PipelineOptimizer:
             result = await self.evaluate(k)
             study.tell(ask, [result.ndcg, result.latency_ms])
             trials.append(result)
+            if on_trial is not None:
+                on_trial(result, len(trials))
         return trials
 
 
