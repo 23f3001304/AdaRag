@@ -16,6 +16,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { type ComponentType, useEffect, useState } from "react";
 
+import { BridgeControl } from "@/components/bridge-control";
 import { BucketSwitcher } from "@/components/bucket-switcher";
 import { Logo } from "@/components/logo";
 import { api } from "@/lib/api";
@@ -112,31 +113,39 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div
           className={cn(
             "flex border-t border-line p-2.5",
-            collapsed ? "flex-col items-center gap-2.5" : "items-center justify-between",
+            collapsed ? "flex-col items-center gap-2.5" : "items-center justify-between gap-2",
           )}
         >
-          <span
-            className="flex items-center gap-2"
-            title={
-              online ? "backend online" : online === false ? "backend offline" : "checking backend"
-            }
+          <div
+            className={cn(
+              "flex min-w-0",
+              collapsed ? "flex-col items-center gap-2.5" : "flex-col gap-1.5",
+            )}
           >
             <span
-              className={cn(
-                "size-1.5 shrink-0 rounded-full transition-colors",
-                online ? "bg-accent" : online === false ? "bg-danger" : "bg-faint",
+              className="flex items-center gap-2"
+              title={
+                online ? "backend online" : online === false ? "backend offline" : "checking backend"
+              }
+            >
+              <span
+                className={cn(
+                  "size-1.5 shrink-0 rounded-full transition-colors",
+                  online ? "bg-accent" : online === false ? "bg-danger" : "bg-faint",
+                )}
+              />
+              {!collapsed && (
+                <span className="font-mono text-[11px] text-muted">
+                  {online ? "backend online" : online === false ? "backend offline" : "checking…"}
+                </span>
               )}
-            />
-            {!collapsed && (
-              <span className="font-mono text-[11px] text-muted">
-                {online ? "backend online" : online === false ? "backend offline" : "checking…"}
-              </span>
-            )}
-          </span>
+            </span>
+            <BridgeControl collapsed={collapsed} />
+          </div>
           <button
             onClick={() => setCollapsed((c) => !c)}
             title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className="rounded-md p-1 text-muted transition-colors hover:bg-panel hover:text-fg"
+            className="shrink-0 rounded-md p-1 text-muted transition-colors hover:bg-panel hover:text-fg"
           >
             {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
           </button>

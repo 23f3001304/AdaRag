@@ -62,16 +62,24 @@ export default function OptimizerPage() {
     }
   };
 
-  const running = (state ? RUNNING.has(state.status) : false) || starting;
-  const done = state?.status === "done";
-  const points = state?.trials?.length ? state.trials : DEMO;
-  const front = done ? (state.front ?? []) : state?.trials?.length ? [] : DEMO;
-  const headline = done ? state.headline : !state || state.status === "idle" ? DEMO_HEADLINE : null;
+  // Only treat the (global) study state as ours when it's for the bucket we're viewing.
+  const mine = state && state.bucket === bucket ? state : null;
+  const running = (mine ? RUNNING.has(mine.status) : false) || starting;
+  const done = mine?.status === "done";
+  const points = mine?.trials?.length ? mine.trials : DEMO;
+  const front = done ? (mine?.front ?? []) : mine?.trials?.length ? [] : DEMO;
+  const headline = done ? mine?.headline : !mine || mine.status === "idle" ? DEMO_HEADLINE : null;
 
   const ms = points.map((p) => p.ms);
   const nd = points.map((p) => p.ndcg);
-  const xDomain = [Math.min(...ms) - 10, Math.max(...ms) + 10];
-  const yDomain = [Math.min(...nd) - 0.01, Math.max(...nd) + 0.01];
+  const xDomain = [
+    Math.floor((Math.min(...ms) - 8) / 10) * 10,
+    Math.ceil((Math.max(...ms) + 8) / 10) * 10,
+  ];
+  const yLo = Math.max(0, Math.floor((Math.min(...nd) - 0.03) * 20) / 20);
+  const yHi = Math.min(1, Math.ceil((Math.max(...nd) + 0.03) * 20) / 20);
+  const yTicks: number[] = [];
+  for (let v = yLo; v <= yHi + 1e-9; v += 0.05) yTicks.push(+v.toFixed(2));
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-6">
@@ -90,22 +98,22 @@ export default function OptimizerPage() {
         </Button>
       </div>
 
-      {state && RUNNING.has(state.status) && (
+      {mine && RUNNING.has(mine.status) && (
         <Panel className="flex items-center gap-3 px-5 py-3 text-sm text-muted">
           <Loader2 size={14} className="shrink-0 animate-spin text-accent" />
-          {state.status === "building_queries"
-            ? `Building golden queries from ${state.bucket}…`
-            : `Trial ${state.trials_done ?? 0} / ${state.trials_total ?? 0}${state.queries ? ` · ${state.queries} queries` : ""}`}
+          {mine.status === "building_queries"
+            ? `Building golden queries from ${mine.bucket}…`
+            : `Trial ${mine.trials_done ?? 0} / ${mine.trials_total ?? 0}${mine.queries ? ` · ${mine.queries} queries` : ""}`}
         </Panel>
       )}
-      {state?.status === "error" && (
-        <Panel className="px-5 py-3 text-sm text-danger">Study failed: {state.error}</Panel>
+      {mine?.status === "error" && (
+        <Panel className="px-5 py-3 text-sm text-danger">Study failed: {mine.error}</Panel>
       )}
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_220px]">
         <Panel className="px-5 py-5">
           <span className="font-mono text-[10px] uppercase tracking-wider text-faint">
-            pareto front · nDCG vs latency · {done ? state.bucket : "sample"}
+            pareto front · nDCG vs latency · {done ? mine?.bucket : "sample"}
           </span>
           <ResponsiveContainer width="100%" height={300} className="mt-3">
             <ScatterChart margin={{ top: 10, right: 12, bottom: 4, left: -6 }}>
@@ -122,7 +130,8 @@ export default function OptimizerPage() {
               <YAxis
                 type="number"
                 dataKey="ndcg"
-                domain={yDomain}
+                domain={[yLo, yHi]}
+                ticks={yTicks}
                 tickFormatter={(v) => v.toFixed(2)}
                 stroke="var(--color-faint)"
                 tick={{ fontSize: 10 }}
@@ -151,9 +160,9 @@ export default function OptimizerPage() {
             </p>
           </Panel>
           <Panel className="grid grid-cols-2 gap-5 px-5 py-4">
-            <Stat label="bucket" value={state?.bucket ?? bucket} />
-            <Stat label="queries" value={state?.queries != null ? String(state.queries) : "—"} />
-            <Stat label="trials" value={done ? String(state.trials_total) : "—"} />
+            <Stat label="queries" value={mine?.queries != null ? String(mine.queries) : "—"} />
+            <Stat label="trials" value={done ? String(mine.trials_total) : "—"} />
+            <Stat label="default K" value={mine?.baseline ? String(mine.baseline.k) : "20"} />
             <Stat label="cost" value="$0" />
           </Panel>
         </div>
