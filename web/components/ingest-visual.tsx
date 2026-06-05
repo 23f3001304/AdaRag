@@ -1,13 +1,13 @@
 "use client";
 
-import { Boxes, Database, FileText, Layers, ScanLine } from "lucide-react";
+import { Boxes, Database, FileText, Layers, Loader2, ScanLine } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { Fragment, useCallback, useRef, useState } from "react";
+import { Fragment, useRef } from "react";
 
 import { useBucket } from "@/components/bucket-context";
+import { type IngestDoc, useIngest } from "@/components/ingest-context";
 import { Button } from "@/components/ui";
 import { VectorField } from "@/components/vector-field";
-import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 
 const STAGES = [
@@ -17,74 +17,27 @@ const STAGES = [
   { key: "index", label: "Index", icon: Database },
 ] as const;
 
-type StageKey = (typeof STAGES)[number]["key"];
-type Stage = "idle" | StageKey | "done";
-const ORDER: StageKey[] = ["profile", "chunk", "embed", "index"];
-const MS: Record<StageKey, number> = { profile: 850, chunk: 950, embed: 1050, index: 1150 };
+const ORDER = ["profile", "chunk", "embed", "index"] as const;
 
-interface Doc {
-  source: string;
-  chunks: number;
-  modality: string;
-  profile: string;
-}
-
-const SAMPLE: Doc = {
+const SAMPLE: IngestDoc = {
   source: "attention_is_all_you_need.pdf",
   chunks: 24,
   modality: "text",
   profile: "paper",
 };
 
-function inferModality(name: string): string {
-  const ext = name.split(".").pop()?.toLowerCase() ?? "";
-  if (["png", "jpg", "jpeg", "webp", "gif", "bmp"].includes(ext)) return "image";
-  if (["wav", "mp3", "m4a", "flac", "ogg"].includes(ext)) return "audio";
-  if (["mp4", "mov", "mkv", "webm", "avi"].includes(ext)) return "video";
-  return "text";
-}
-
 export function IngestVisual() {
   const { bucket } = useBucket();
-  const [stage, setStage] = useState<Stage>("idle");
-  const [doc, setDoc] = useState<Doc | null>(null);
-  const [note, setNote] = useState("");
-  const timers = useRef<number[]>([]);
+  const { doc, stage, note, ingest, playSample } = useIngest();
   const fileInput = useRef<HTMLInputElement>(null);
 
-  const idx = stage === "done" ? ORDER.length : stage === "idle" ? -1 : ORDER.indexOf(stage);
-
-  const play = useCallback((d: Doc) => {
-    timers.current.forEach(clearTimeout);
-    timers.current = [];
-    setDoc(d);
-    let at = 0;
-    for (const s of ORDER) {
-      timers.current.push(window.setTimeout(() => setStage(s), at));
-      at += MS[s];
-    }
-    timers.current.push(window.setTimeout(() => setStage("done"), at));
-  }, []);
-
-  const onFile = useCallback(
-    async (file: File) => {
-      const modality = inferModality(file.name);
-      setNote("");
-      play({
-        source: file.name,
-        chunks: Math.max(4, Math.round(file.size / 1800)),
-        modality,
-        profile: modality === "text" ? "prose" : modality,
-      });
-      try {
-        const res = await api.ingest(file, bucket);
-        setDoc((d) => (d ? { ...d, chunks: res.chunks, source: res.source } : d));
-      } catch {
-        setNote("backend offline - counts are estimated");
-      }
-    },
-    [bucket, play],
-  );
+  const idx =
+    stage === "done"
+      ? ORDER.length
+      : stage === "idle" || stage === "error"
+        ? -1
+        : ORDER.indexOf(stage as (typeof ORDER)[number]);
+  const indexing = stage === "index"; // holding here until the real ingest resolves
 
   return (
     <div className="flex flex-col gap-5">
@@ -104,7 +57,11 @@ export function IngestVisual() {
                       : "border-line text-faint",
                 )}
               >
-                <s.icon size={14} className={cn(active && "text-accent")} />
+                {active && indexing ? (
+                  <Loader2 size={14} className="animate-spin text-accent" />
+                ) : (
+                  <s.icon size={14} className={cn(active && "text-accent")} />
+                )}
                 <span className="font-mono text-xs">{s.label}</span>
               </div>
               {i < STAGES.length - 1 && (
@@ -151,9 +108,7 @@ export function IngestVisual() {
 
           {doc && idx >= 1 && (
             <div>
-              <span className="font-mono text-[10px] uppercase tracking-wider text-faint">
-                chunks
-              </span>
+              <span className="font-mono text-[10px] uppercase tracking-wider text-faint">chunks</span>
               <div className="mt-2 grid grid-cols-6 gap-1.5">
                 {Array.from({ length: Math.min(doc.chunks, 18) }).map((_, i) => (
                   <motion.div
@@ -174,11 +129,7 @@ export function IngestVisual() {
             vector space · bge-m3 · 1024d
           </span>
           <div className="mt-2 flex flex-1">
-            <VectorField
-              count={doc?.chunks ?? 0}
-              modality={doc?.modality ?? "text"}
-              active={!!doc && idx >= 2}
-            />
+            <VectorField count={doc?.chunks ?? 0} modality={doc?.modality ?? "text"} active={!!doc && idx >= 2} />
           </div>
         </div>
       </div>
@@ -195,15 +146,21 @@ export function IngestVisual() {
             ref={fileInput}
             type="file"
             hidden
-            onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])}
+            onChange={(e) => e.target.files?.[0] && ingest(e.target.files[0], bucket)}
           />
           <Button variant="outline" onClick={() => fileInput.current?.click()}>
             Upload a file
           </Button>
-          <Button onClick={() => play(SAMPLE)}>Play sample</Button>
+          <Button onClick={() => playSample(SAMPLE)}>Play sample</Button>
         </div>
       </div>
-      {note && <p className="font-mono text-xs text-muted">{note}</p>}
+      {indexing && (
+        <p className="font-mono text-xs text-muted">
+          indexing - enrichment runs one LLM call per chunk, so this can take a moment. you can
+          switch tabs; it keeps running.
+        </p>
+      )}
+      {note && <p className="font-mono text-xs text-danger">{note}</p>}
     </div>
   );
 }

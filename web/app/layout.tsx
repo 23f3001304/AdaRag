@@ -3,6 +3,7 @@ import { Bricolage_Grotesque, Hanken_Grotesk, JetBrains_Mono } from "next/font/g
 import "./globals.css";
 import { AppShell } from "@/components/app-shell";
 import { BucketProvider } from "@/components/bucket-context";
+import { IngestProvider } from "@/components/ingest-context";
 
 const display = Bricolage_Grotesque({
   variable: "--font-bricolage",
@@ -35,7 +36,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={`${display.variable} ${sans.variable} ${mono.variable}`}>
       <body className="min-h-screen antialiased">
         <BucketProvider>
-          <AppShell>{children}</AppShell>
+          <IngestProvider>
+            <AppShell>{children}</AppShell>
+          </IngestProvider>
         </BucketProvider>
       </body>
     </html>

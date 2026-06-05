@@ -48,9 +48,9 @@ class QdrantIndex:
         )
 
     async def upsert(self, points: list[models.PointStruct]) -> None:
-        """Upsert points into the collection."""
+        """Upsert points into the collection (wait=True so they're immediately listable)."""
         if points:
-            await self._client.upsert(collection_name=self._collection, points=points)
+            await self._client.upsert(collection_name=self._collection, points=points, wait=True)
 
     async def search(
         self,
