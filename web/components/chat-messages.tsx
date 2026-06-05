@@ -92,7 +92,7 @@ export function ChatMessages({
           </motion.div>
         ))}
       </AnimatePresence>
-      {busy && (
+      {busy && turns[turns.length - 1]?.role !== "assistant" && (
         <div className="flex gap-3">
           <Avatar role="assistant" />
           <div className="flex items-center gap-1 pt-2">

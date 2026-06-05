@@ -9,7 +9,7 @@ import { ChatList } from "@/components/chat-list";
 import { ChatMessages, type Source, type Turn } from "@/components/chat-messages";
 import { ModePicker } from "@/components/mode-picker";
 import { type Resource, ResourceModal } from "@/components/resource-modal";
-import { type ModeOption, api } from "@/lib/api";
+import { type ModeOption, api, chatStream, citationsToSources } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { loadSkills, saveSkills, type Skill } from "@/lib/skills";
 
@@ -92,6 +92,18 @@ export default function ChatPage() {
   };
   const pushAssistant = (base: Chat[], turn: Turn) =>
     persist(base.map((c) => (c.id === activeId ? { ...c, turns: [...c.turns, turn] } : c)));
+  // Mutate the active chat's last turn (used to grow the streaming answer token by token).
+  const updateLast = (fn: (t: Turn) => Turn) =>
+    setChats((cs) => {
+      const next = cs.map((c) => {
+        if (c.id !== activeId || !c.turns.length) return c;
+        const turns = [...c.turns];
+        turns[turns.length - 1] = fn(turns[turns.length - 1]);
+        return { ...c, turns };
+      });
+      localStorage.setItem(KEY, JSON.stringify(next));
+      return next;
+    });
 
   const createSkill = async (description: string) => {
     if (busy) return;
@@ -169,50 +181,56 @@ export default function ChatPage() {
     if ((!text && !file) || busy || !active) return;
     if (creating && text) return createSkill(text);
     const base = pushUser(text, file?.name);
-    const reply = (turn: Turn) => pushAssistant(base, turn);
     setBusy(true);
-    try {
-      if (file) {
+    if (file) {
+      // Attached file: route ingest-vs-ask (non-streamed).
+      try {
         const intent = text ? (await api.route(text)).intent : "ingest";
         if (intent === "ingest") {
           const res = await api.ingest(file, bucket);
           const n = res.chunks;
-          reply({
+          pushAssistant(base, {
             role: "assistant",
             text: `Ingested ${res.source} - ${n} chunk${n === 1 ? "" : "s"} into the ${bucket} bucket.`,
           });
+          setBusy(false);
           return;
         }
+      } catch {
+        pushAssistant(base, { role: "assistant", text: "ingest failed - is the CLI bridge running?" });
+        setBusy(false);
+        return;
       }
-      const skill = activeSkill ? { persona: activeSkill.persona, top_k: activeSkill.topK } : undefined;
-      const ctrl = new AbortController();
-      abortRef.current = ctrl;
-      const r = await api.chat(active.session, text, bucket, active.mode, skill, thinking, ctrl.signal);
-      const seen = new Set<string>();
-      const sources: Source[] = [];
-      for (const c of r.citations) {
-        if (seen.has(c.source)) continue;
-        seen.add(c.source);
-        sources.push({ source: c.source, path: c.original_path, modality: c.modality });
-        if (sources.length >= 5) break;
+    }
+    const skill = activeSkill ? { persona: activeSkill.persona, top_k: activeSkill.topK } : undefined;
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    let started = false;
+    const grow = (fn: (t: Turn) => Turn) => {
+      if (!started) {
+        pushAssistant(base, { role: "assistant", text: "" });
+        started = true;
       }
-      reply({
-        role: "assistant",
-        text: r.answer,
-        query: r.search_query,
-        sources,
-        thinking: r.thinking ?? undefined,
-      });
+      updateLast(fn);
+    };
+    try {
+      await chatStream(
+        { session_id: active.session, message: text, bucket, mode: active.mode, skill },
+        ctrl.signal,
+        {
+          query: (q) => grow((t) => ({ ...t, query: q })),
+          token: (tok) => grow((t) => ({ ...t, text: t.text + tok })),
+          thinking: (th) => thinking && grow((t) => ({ ...t, thinking: (t.thinking ?? "") + th })),
+          done: (cits) => grow((t) => ({ ...t, sources: citationsToSources(cits) })),
+          error: (m) => grow((t) => ({ ...t, text: `${t.text}\n\n_error: ${m}_` })),
+        },
+      );
     } catch (e) {
-      if (e instanceof DOMException && e.name === "AbortError") {
-        reply({ role: "assistant", text: "_(stopped)_" });
-      } else {
-        const off = String(e).includes("Failed to fetch");
-        reply({
-          role: "assistant",
-          text: off ? "backend offline." : "request failed - is the CLI bridge running?",
-        });
-      }
+      const aborted = e instanceof DOMException && e.name === "AbortError";
+      grow((t) => ({
+        ...t,
+        text: aborted ? `${t.text} _(stopped)_` : t.text || "request failed - is the CLI bridge running?",
+      }));
     } finally {
       setBusy(false);
     }

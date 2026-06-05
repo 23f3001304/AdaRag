@@ -104,6 +104,67 @@ export async function downloadFile(path: string, name: string): Promise<void> {
   URL.revokeObjectURL(obj);
 }
 
+// Dedupe citations to at most 5 distinct sources for the chat's source chips.
+export function citationsToSources(
+  cits: Citation[],
+): { source: string; path: string | null; modality: string }[] {
+  const seen = new Set<string>();
+  return cits
+    .filter((c) => !seen.has(c.source) && seen.add(c.source))
+    .slice(0, 5)
+    .map((c) => ({ source: c.source, path: c.original_path, modality: c.modality }));
+}
+
+export interface StreamHandlers {
+  query?: (q: string) => void;
+  token: (t: string) => void;
+  thinking: (t: string) => void;
+  done: (citations: Citation[], searchQuery?: string) => void;
+  error?: (msg: string) => void;
+}
+
+// Stream a chat turn over SSE, invoking handlers as text/thinking deltas arrive.
+export async function chatStream(
+  body: {
+    session_id: string;
+    message: string;
+    bucket: string;
+    mode?: ModeOption;
+    skill?: SkillOverride;
+  },
+  signal: AbortSignal | undefined,
+  on: StreamHandlers,
+): Promise<void> {
+  const res = await fetch(`${BASE}/chat/stream`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+    signal,
+    cache: "no-store",
+  });
+  if (!res.ok || !res.body) throw new Error(`chat/stream -> ${res.status}`);
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    const parts = buf.split("\n\n");
+    buf = parts.pop() ?? "";
+    for (const part of parts) {
+      const at = part.indexOf("data:");
+      if (at < 0) continue;
+      const ev = JSON.parse(part.slice(part.indexOf("{", at)));
+      if (ev.type === "text") on.token(ev.text);
+      else if (ev.type === "thinking") on.thinking(ev.text);
+      else if (ev.type === "query") on.query?.(ev.text);
+      else if (ev.type === "done") on.done(ev.citations ?? [], ev.search_query);
+      else if (ev.type === "error") on.error?.(ev.text);
+    }
+  }
+}
+
 export const api = {
   health: () => req<{ status: string; services: Record<string, boolean> }>("/health"),
   listBuckets: () => req<{ buckets: string[] }>("/buckets"),
