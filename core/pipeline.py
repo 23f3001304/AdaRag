@@ -19,6 +19,30 @@ from retrieval.query_rewrite import QueryTransformer
 
 _ENRICH_CONCURRENCY = 6  # parallel enrichment LLM calls per ingest (bounds concurrent CLI procs)
 
+_MEDIA_MODS = frozenset({"image", "audio", "video"})
+
+
+def _diversify(ranked: list, k: int) -> list:
+    """Keep the top_k by relevance, but guarantee every retrieved media modality (image / audio /
+    video) lands its best chunk in the context.
+
+    Media is captioned in different words than the question ("a young man ..." vs "how does Hemang
+    look"), so lexically-matching text chunks crowd it out - the reranker's near-flat scores then
+    drop the photo just past the cut, and it contributes nothing to a question that is about it.
+    A retrieved media chunk was already judged relevant by hybrid search, so each such modality
+    earns one slot; the rest of the top_k stays ordered by relevance.
+    """
+    hits = ranked[:k]
+    present = {h.modality for h in hits}
+    missing = []
+    for h in ranked[k:]:
+        if h.modality in _MEDIA_MODS and h.modality not in present:
+            present.add(h.modality)
+            missing.append(h)  # best chunk of a media modality the text chunks buried
+    if not missing:
+        return hits
+    return hits[: max(k - len(missing), 1)] + missing
+
 
 class IngestService:
     """Chunk -> optional enrich -> embed (dense+sparse) -> store in Qdrant + Postgres."""
@@ -222,7 +246,10 @@ class AnswerService:
         if qfilter is not None and not candidates:
             candidates = await self._retriever.retrieve(search)  # filter too strict; fall back
         k = top_k if top_k and top_k > 0 else self._top_k
-        return await self._reranker.rerank(query, candidates, k)
+        # Rank the whole candidate set (same cross-encoder cost), then keep top_k - but make sure
+        # each retrieved media modality contributes its best chunk instead of being buried by text.
+        ranked = await self._reranker.rerank(query, candidates, max(len(candidates), 1))
+        return _diversify(ranked, k)
 
     @staticmethod
     def _build(query: str, hits: list, persona: str | None) -> tuple[str, list[dict]]:
