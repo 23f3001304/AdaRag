@@ -35,11 +35,21 @@ class ChatOrchestrator:
             lambda: deque(maxlen=max_turns)
         )
 
-    async def chat(self, session_id: str, message: str) -> dict:
-        """Answer one turn in a session; rewrites follow-ups to standalone queries first."""
+    async def chat(
+        self,
+        session_id: str,
+        message: str,
+        *,
+        persona: str | None = None,
+        top_k: int | None = None,
+    ) -> dict:
+        """Answer one turn in a session; rewrites follow-ups to standalone queries first.
+
+        An applied skill may pass a ``persona`` (system framing) and ``top_k`` (retrieval depth).
+        """
         history = self._sessions[session_id]
         query = await self._contextualize(message, history) if history else message
-        result = await self._answer.answer(query)
+        result = await self._answer.answer(query, persona=persona, top_k=top_k)
         history.append((message, result["answer"]))
         return {
             "answer": result["answer"],

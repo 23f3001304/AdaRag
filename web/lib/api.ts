@@ -39,6 +39,12 @@ export interface DocumentInfo {
   chunks: number;
 }
 
+// Answer-time overrides carried by an applied skill (persona framing + retrieval depth).
+export interface SkillOverride {
+  persona?: string;
+  top_k?: number;
+}
+
 function json(body: unknown): RequestInit {
   return { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) };
 }
@@ -52,9 +58,10 @@ export const api = {
     req<{ bucket: string; status: string }>(`/buckets/${encodeURIComponent(name)}`, { method: "POST" }),
   deleteBucket: (name: string) =>
     req<{ bucket: string; status: string }>(`/buckets/${encodeURIComponent(name)}`, { method: "DELETE" }),
-  query: (query: string, bucket = "default") => req<Answer>("/query", json({ query, bucket })),
-  chat: (sessionId: string, message: string, bucket = "default") =>
-    req<Answer>("/chat", json({ session_id: sessionId, message, bucket })),
+  query: (query: string, bucket = "default", skill?: SkillOverride) =>
+    req<Answer>("/query", json({ query, bucket, skill })),
+  chat: (sessionId: string, message: string, bucket = "default", skill?: SkillOverride) =>
+    req<Answer>("/chat", json({ session_id: sessionId, message, bucket, skill })),
   ingest: (file: File, bucket = "default") => {
     const form = new FormData();
     form.append("file", file);

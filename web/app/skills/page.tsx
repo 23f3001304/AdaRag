@@ -4,19 +4,8 @@ import { Boxes, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Button, Panel } from "@/components/ui";
+import { loadSkills, saveSkills, type Skill } from "@/lib/skills";
 
-interface Skill {
-  id: string;
-  name: string;
-  bucket: string;
-  persona: string;
-  topK: number;
-  rerank: number;
-  enrich: boolean;
-  templates: string[];
-}
-
-const KEY = "adarag.skills";
 const input =
   "w-full rounded-md border border-line bg-bg px-2.5 py-2 text-sm text-fg outline-none placeholder:text-faint focus:border-line-2";
 
@@ -36,16 +25,12 @@ export default function SkillsPage() {
   const [draft, setDraft] = useState<Skill | null>(null);
 
   useEffect(() => {
-    try {
-      setSkills(JSON.parse(localStorage.getItem(KEY) ?? "[]"));
-    } catch {
-      setSkills([]);
-    }
+    setSkills(loadSkills());
   }, []);
 
   const persist = (next: Skill[]) => {
     setSkills(next);
-    localStorage.setItem(KEY, JSON.stringify(next));
+    saveSkills(next);
   };
   const save = () => {
     if (!draft || !draft.name.trim()) return;

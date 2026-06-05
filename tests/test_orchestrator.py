@@ -6,13 +6,17 @@ from orchestrator.chat import ChatOrchestrator
 
 
 class _FakeAnswer:
-    """Records the queries it was asked and echoes a cited answer."""
+    """Records the queries (and any skill overrides) it was asked, and echoes a cited answer."""
 
     def __init__(self) -> None:
         self.queries: list[str] = []
+        self.overrides: list[tuple[str | None, int | None]] = []
 
-    async def answer(self, query: str) -> dict:
+    async def answer(
+        self, query: str, *, persona: str | None = None, top_k: int | None = None
+    ) -> dict:
         self.queries.append(query)
+        self.overrides.append((persona, top_k))
         return {"answer": f"answer to '{query}'", "citations": [{"n": 1, "source": "doc.txt"}]}
 
 
@@ -56,3 +60,16 @@ async def test_sessions_are_isolated():
     out = await chat.chat("b", "second")  # different session, no history -> no rewrite
     assert llm.calls == 0
     assert out["search_query"] == "second"
+
+
+async def test_skill_overrides_reach_the_answer_service():
+    answer, llm = _FakeAnswer(), _FakeLLM()
+    chat = ChatOrchestrator(answer, llm)
+    await chat.chat("s1", "what is RRF?", persona="Answer as a terse expert.", top_k=12)
+    assert answer.overrides == [("Answer as a terse expert.", 12)]
+
+
+async def test_no_skill_passes_no_overrides():
+    answer, llm = _FakeAnswer(), _FakeLLM()
+    await ChatOrchestrator(answer, llm).chat("s1", "plain question")
+    assert answer.overrides == [(None, None)]

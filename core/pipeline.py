@@ -130,7 +130,10 @@ class AnswerService:
         self._transform = transform
         self._query_meta = query_meta
 
-    async def answer(self, query: str) -> dict:
+    async def answer(
+        self, query: str, *, persona: str | None = None, top_k: int | None = None
+    ) -> dict:
+        """Answer a query; a skill may override the persona (system framing) and top_k depth."""
         search = await self._transform.transform(query) if self._transform else query
         qfilter = None
         if self._query_meta is not None:
@@ -138,11 +141,15 @@ class AnswerService:
         candidates = await self._retriever.retrieve(search, qfilter)
         if qfilter is not None and not candidates:
             candidates = await self._retriever.retrieve(search)  # filter too strict; fall back
-        hits = await self._reranker.rerank(query, candidates, self._top_k)
+        k = top_k if top_k and top_k > 0 else self._top_k
+        hits = await self._reranker.rerank(query, candidates, k)
         if not hits:
             return {"answer": "No documents have been ingested yet.", "citations": []}
         context = "\n\n".join(f"[{i + 1}] ({h.source}) {h.text}" for i, h in enumerate(hits))
-        answer = await self._llm.generate(_ANSWER_PROMPT.format(context=context, query=query))
+        prompt = _ANSWER_PROMPT.format(context=context, query=query)
+        if persona and persona.strip():
+            prompt = f"{persona.strip()}\n\n{prompt}"
+        answer = await self._llm.generate(prompt)
         citations = [
             {
                 "n": i + 1,

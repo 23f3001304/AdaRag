@@ -6,9 +6,11 @@ import { useEffect, useRef, useState } from "react";
 
 import { useBucket } from "@/components/bucket-context";
 import { Logo } from "@/components/logo";
+import { SkillPicker } from "@/components/skill-picker";
 import { Button } from "@/components/ui";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
+import { loadSkills, type Skill } from "@/lib/skills";
 
 interface Turn {
   role: "user" | "assistant";
@@ -21,6 +23,7 @@ interface Chat {
   title: string;
   session: string;
   turns: Turn[];
+  skillId?: string;
 }
 
 const KEY = "adarag.chats";
@@ -37,7 +40,15 @@ export default function ChatPage() {
   const [activeId, setActiveId] = useState("");
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
+  const [skills, setSkills] = useState<Skill[]>([]);
   const endRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const sync = () => setSkills(loadSkills());
+    sync();
+    window.addEventListener("focus", sync); // pick up skills created on the Skills page
+    return () => window.removeEventListener("focus", sync);
+  }, []);
 
   useEffect(() => {
     let saved: Chat[] = [];
@@ -56,6 +67,10 @@ export default function ChatPage() {
     setChats(next);
     localStorage.setItem(KEY, JSON.stringify(next));
   };
+  const activeSkill = skills.find((s) => s.id === active?.skillId);
+  const targetBucket = activeSkill?.bucket || bucket;
+  const setChatSkill = (id: string | undefined) =>
+    persist(chats.map((c) => (c.id === activeId ? { ...c, skillId: id } : c)));
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -89,7 +104,12 @@ export default function ChatPage() {
     persist(withUser);
     setBusy(true);
     try {
-      const r = await api.chat(active.session, text, bucket);
+      const r = await api.chat(
+        active.session,
+        text,
+        targetBucket,
+        activeSkill ? { persona: activeSkill.persona, top_k: activeSkill.topK } : undefined,
+      );
       const sources = [...new Set(r.citations.map((c) => c.source))].slice(0, 5);
       persist(
         withUser.map((c) =>
@@ -150,10 +170,17 @@ export default function ChatPage() {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col rounded-xl border border-line bg-panel/30">
+        <div className="flex items-center justify-between gap-2 border-b border-line px-4 py-2.5">
+          <SkillPicker skills={skills} value={active?.skillId} onChange={setChatSkill} />
+          <span className="font-mono text-[10px] text-faint">
+            bucket: <span className="text-muted">{targetBucket}</span>
+          </span>
+        </div>
         <div className="flex-1 space-y-5 overflow-y-auto p-6">
           {active && active.turns.length === 0 && !busy && (
             <p className="mt-16 text-center text-sm text-faint">
-              Ask anything about the <span className="text-muted">{bucket}</span> bucket.
+              Ask anything about the <span className="text-muted">{targetBucket}</span> bucket
+              {activeSkill && <> as <span className="text-accent">{activeSkill.name}</span></>}.
             </p>
           )}
           <AnimatePresence initial={false}>
