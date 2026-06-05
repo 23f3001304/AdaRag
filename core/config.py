@@ -55,9 +55,9 @@ class Settings(BaseSettings):
     # (topic-named) queries: recall@3 +0.22, MRR +0.20 post-rerank. Costs one LLM call per chunk.
     enrich_context: bool = True
     # Metadata enrichment (Phase 2): entities/dates -> payload filters, keyphrases -> sparse boost.
-    # Off by default — its A/B is a retrieval wash (redundant with context); kept for the future
-    # query-layer metadata filters (entities/dates land in the payload). See evaluation/BASELINE.md.
-    enrich_metadata: bool = False
+    # On now: per-chunk entities name who/what a file is about, which powers ingest-time entity
+    # disambiguation and the query-layer metadata filters. One LLM call per chunk (fast on ollama).
+    enrich_metadata: bool = True
 
     # Adaptive chunking (Phase 3): profile each doc -> code-AST / paper-section / notes; else naive.
     adaptive_chunking: bool = True
