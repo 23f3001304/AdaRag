@@ -64,6 +64,8 @@ services:
     volumes:
       # Persist downloaded models (bge-m3, reranker) across recreates — fetch them once, not per build.
       - hf_cache:/root/.cache/huggingface
+      # Persist uploaded originals across recreates so Files downloads keep working (host-visible).
+      - ./data/uploads:/app/data/uploads
     ports:
       - "8000:8000"
     # GPU passthrough (Docker Desktop + WSL2): lets the in-container bge-m3 embedder use the 5080.

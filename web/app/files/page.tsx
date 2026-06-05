@@ -7,7 +7,7 @@ import { useBucket } from "@/components/bucket-context";
 import { Modal } from "@/components/modal";
 import { type Resource, ResourceModal } from "@/components/resource-modal";
 import { Button, Panel } from "@/components/ui";
-import { type DocumentInfo, api } from "@/lib/api";
+import { type DocumentInfo, api, downloadFile } from "@/lib/api";
 
 const MOD_ICON: Record<string, ComponentType<{ size?: number; className?: string }>> = {
   text: FileText,
@@ -30,6 +30,7 @@ export default function FilesPage() {
   const [preview, setPreview] = useState<Resource | null>(null);
   const [confirmDel, setConfirmDel] = useState<DocumentInfo | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [note, setNote] = useState("");
 
   const load = useCallback(() => {
     setError("");
@@ -69,6 +70,7 @@ export default function FilesPage() {
             Everything indexed in this bucket
             {docs && docs.length > 0 ? ` · ${docs.length} files · ${total} chunks` : ""}.
           </p>
+          {note && <p className="mt-1 text-xs text-danger">{note}</p>}
         </div>
         <Button variant="outline" onClick={load}>
           <RefreshCw size={14} /> Refresh
@@ -118,9 +120,17 @@ export default function FilesPage() {
                     </button>
                   )}
                   {path && (
-                    <a href={api.fileUrl(path, d.source)} download title="Download" className="transition-colors hover:text-fg">
+                    <button
+                      title="Download"
+                      onClick={() =>
+                        downloadFile(path, d.source).catch((e) =>
+                          setNote(`${d.source}: ${e instanceof Error ? e.message : e}`),
+                        )
+                      }
+                      className="transition-colors hover:text-fg"
+                    >
                       <Download size={15} />
-                    </a>
+                    </button>
                   )}
                   <button
                     title="Delete"

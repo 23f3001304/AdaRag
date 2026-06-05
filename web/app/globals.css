@@ -73,3 +73,10 @@
     linear-gradient(to bottom, color-mix(in oklab, var(--color-line) 60%, transparent) 1px, transparent 1px);
   background-size: 44px 44px;
 }
+
+/* markdown: a fenced block's inner <code> shouldn't carry the inline-code chip styling */
+.md-body pre code {
+  background: transparent;
+  padding: 0;
+  color: var(--color-fg);
+}

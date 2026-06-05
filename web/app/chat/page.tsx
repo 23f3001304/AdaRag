@@ -8,6 +8,7 @@ import { useBucket } from "@/components/bucket-context";
 import { ChatComposer } from "@/components/chat-composer";
 import { ChatList } from "@/components/chat-list";
 import { Logo } from "@/components/logo";
+import { MarkdownMessage } from "@/components/markdown-message";
 import { ModePicker } from "@/components/mode-picker";
 import { type Resource, ResourceModal } from "@/components/resource-modal";
 import { type ModeOption, api } from "@/lib/api";
@@ -183,7 +184,12 @@ export default function ChatPage() {
                       <Paperclip size={10} className="text-accent" /> {t.file}
                     </span>
                   )}
-                  {t.text && <p className="whitespace-pre-wrap text-sm leading-relaxed text-fg">{t.text}</p>}
+                  {t.text &&
+                    (t.role === "assistant" ? (
+                      <MarkdownMessage text={t.text} />
+                    ) : (
+                      <p className="whitespace-pre-wrap text-sm leading-relaxed text-fg">{t.text}</p>
+                    ))}
                   {t.sources && t.sources.length > 0 && (
                     <div className="mt-1 flex flex-wrap gap-1.5">
                       {t.sources.map((s) =>

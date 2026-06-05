@@ -74,6 +74,21 @@ function json(body: unknown): RequestInit {
   return { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) };
 }
 
+// Download a preserved original with its real filename. Fetches to a blob so the name is exact
+// (not derived from the URL) and a missing file surfaces as an error instead of saving junk.
+export async function downloadFile(path: string, name: string): Promise<void> {
+  const res = await fetch(`${BASE}/files/raw?path=${encodeURIComponent(path)}`, { cache: "no-store" });
+  if (!res.ok) throw new Error(res.status === 404 ? "original no longer stored" : `failed (${res.status})`);
+  const obj = URL.createObjectURL(await res.blob());
+  const a = document.createElement("a");
+  a.href = obj;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(obj);
+}
+
 export const api = {
   health: () => req<{ status: string; services: Record<string, boolean> }>("/health"),
   listBuckets: () => req<{ buckets: string[] }>("/buckets"),
