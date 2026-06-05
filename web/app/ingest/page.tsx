@@ -10,7 +10,7 @@ export default function IngestPage() {
           bucket&apos;s vector space. Text, images, audio, and video all route through the same flow.
         </p>
       </div>
-      <IngestVisual bucket="default" />
+      <IngestVisual />
     </div>
   );
 }

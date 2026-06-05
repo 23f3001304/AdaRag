@@ -3,8 +3,6 @@
 import {
   Boxes,
   ChevronRight,
-  ChevronsUpDown,
-  Database,
   FileStack,
   LayoutGrid,
   MessageSquare,
@@ -18,6 +16,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { type ComponentType, useEffect, useState } from "react";
 
+import { BucketSwitcher } from "@/components/bucket-switcher";
 import { Logo } from "@/components/logo";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
@@ -76,25 +75,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
 
         <div className="p-2.5">
-          <button
-            className={cn(
-              "flex w-full items-center gap-2.5 rounded-md border border-line bg-panel py-2 text-left transition-colors hover:border-line-2",
-              collapsed ? "justify-center px-0" : "px-2.5",
-            )}
-          >
-            <Database size={15} className="shrink-0 text-accent" />
-            {!collapsed && (
-              <>
-                <span className="flex min-w-0 flex-col leading-tight">
-                  <span className="font-mono text-[9px] uppercase tracking-wider text-faint">
-                    bucket
-                  </span>
-                  <span className="truncate text-sm text-fg">default</span>
-                </span>
-                <ChevronsUpDown size={14} className="ml-auto shrink-0 text-faint" />
-              </>
-            )}
-          </button>
+          <BucketSwitcher collapsed={collapsed} />
         </div>
 
         <nav className="flex flex-1 flex-col gap-0.5 px-2.5">

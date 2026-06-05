@@ -3,6 +3,7 @@
 import { Search as SearchIcon } from "lucide-react";
 import { useState } from "react";
 
+import { useBucket } from "@/components/bucket-context";
 import { Button, Panel } from "@/components/ui";
 import { type Answer, api } from "@/lib/api";
 import { cn } from "@/lib/cn";
@@ -15,6 +16,7 @@ const MOD_BG: Record<string, string> = {
 };
 
 export default function SearchPage() {
+  const { bucket } = useBucket();
   const [q, setQ] = useState("");
   const [res, setRes] = useState<Answer | null>(null);
   const [loading, setLoading] = useState(false);
@@ -26,7 +28,7 @@ export default function SearchPage() {
     setErr("");
     setRes(null);
     try {
-      setRes(await api.query(q, "default"));
+      setRes(await api.query(q, bucket));
     } catch (e) {
       setErr(String(e).includes("Failed to fetch") ? "backend offline" : "query failed");
     } finally {

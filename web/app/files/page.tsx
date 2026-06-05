@@ -3,6 +3,7 @@
 import { FileText, Image as ImageIcon, Music, RefreshCw, Video } from "lucide-react";
 import { type ComponentType, useCallback, useEffect, useState } from "react";
 
+import { useBucket } from "@/components/bucket-context";
 import { Button, Panel } from "@/components/ui";
 import { type DocumentInfo, api } from "@/lib/api";
 
@@ -20,6 +21,7 @@ const MOD_COLOR: Record<string, string> = {
 };
 
 export default function FilesPage() {
+  const { bucket } = useBucket();
   const [docs, setDocs] = useState<DocumentInfo[] | null>(null);
   const [error, setError] = useState("");
 
@@ -27,13 +29,13 @@ export default function FilesPage() {
     setError("");
     setDocs(null);
     api
-      .listDocuments("default")
+      .listDocuments(bucket)
       .then((r) => setDocs(r.documents))
       .catch((e) => {
         setDocs([]);
         setError(String(e).includes("Failed to fetch") ? "offline" : "stale");
       });
-  }, []);
+  }, [bucket]);
   useEffect(() => load(), [load]);
 
   const total = docs?.reduce((s, d) => s + d.chunks, 0) ?? 0;

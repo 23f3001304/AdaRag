@@ -4,6 +4,7 @@ import { Boxes, Database, FileText, Layers, ScanLine } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { Fragment, useCallback, useRef, useState } from "react";
 
+import { useBucket } from "@/components/bucket-context";
 import { Button } from "@/components/ui";
 import { VectorField } from "@/components/vector-field";
 import { api } from "@/lib/api";
@@ -43,7 +44,8 @@ function inferModality(name: string): string {
   return "text";
 }
 
-export function IngestVisual({ bucket = "default" }: { bucket?: string }) {
+export function IngestVisual() {
+  const { bucket } = useBucket();
   const [stage, setStage] = useState<Stage>("idle");
   const [doc, setDoc] = useState<Doc | null>(null);
   const [note, setNote] = useState("");
