@@ -24,6 +24,31 @@ Follow-up: {message}
 
 Standalone query:"""
 
+_CHITCHAT_PROMPT = """You are AdaRag, an assistant grounded in a private knowledge base. Reply
+briefly and warmly to this greeting or small talk (1-2 sentences), then invite a question about the
+user's documents. Do not invent facts.
+
+User: {message}
+
+Reply:"""
+
+# Obvious greetings / small talk that should answer directly instead of triggering a retrieval.
+_GREETINGS = frozenset(
+    {
+        "hi", "hello", "hey", "yo", "hiya", "howdy", "sup", "hi there", "hello there",
+        "thanks", "thank you", "thx", "ty", "ok", "okay", "cool", "nice", "great", "awesome",
+        "bye", "goodbye", "see you", "cya", "good night",
+        "who are you", "what are you", "what can you do", "what do you do", "help",
+        "how are you", "hows it going", "how's it going", "good morning", "good evening",
+        "good afternoon",
+    }
+)
+
+
+def _is_chitchat(message: str) -> bool:
+    """Cheap, no-LLM check: an obvious greeting / small talk that shouldn't hit retrieval."""
+    return message.strip().lower().rstrip("!.?") in _GREETINGS
+
 
 class ChatOrchestrator:
     """Multi-turn RAG chat: contextualize each turn against history, then answer with citations."""
@@ -46,8 +71,13 @@ class ChatOrchestrator:
         """Answer one turn in a session; rewrites follow-ups to standalone queries first.
 
         An applied skill may pass a ``persona`` (system framing) and ``top_k`` (retrieval depth).
+        A greeting / small talk answers directly (no retrieval, no citations, no search query).
         """
         history = self._sessions[session_id]
+        if _is_chitchat(message):
+            reply = (await self._llm.generate(_CHITCHAT_PROMPT.format(message=message))).strip()
+            history.append((message, reply))
+            return {"answer": reply, "citations": [], "search_query": None}
         query = await self._contextualize(message, history) if history else message
         result = await self._answer.answer(query, persona=persona, top_k=top_k)
         history.append((message, result["answer"]))

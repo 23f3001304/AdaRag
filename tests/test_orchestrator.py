@@ -62,6 +62,22 @@ async def test_sessions_are_isolated():
     assert out["search_query"] == "second"
 
 
+async def test_greeting_answers_without_retrieval():
+    answer, llm = _FakeAnswer(), _FakeLLM("Hi! Ask me about your docs.")
+    out = await ChatOrchestrator(answer, llm).chat("s1", "hi")
+    assert answer.queries == []  # a greeting never reaches the answer service
+    assert out["citations"] == []
+    assert out["search_query"] is None
+    assert out["answer"] == "Hi! Ask me about your docs."
+    assert llm.calls == 1  # one direct reply, no contextualization or retrieval
+
+
+async def test_real_question_still_retrieves():
+    answer, llm = _FakeAnswer(), _FakeLLM()
+    await ChatOrchestrator(answer, llm).chat("s1", "what is reranking?")
+    assert answer.queries == ["what is reranking?"]  # not chitchat -> retrieves
+
+
 async def test_skill_overrides_reach_the_answer_service():
     answer, llm = _FakeAnswer(), _FakeLLM()
     chat = ChatOrchestrator(answer, llm)
