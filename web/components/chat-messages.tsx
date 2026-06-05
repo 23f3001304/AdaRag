@@ -64,7 +64,7 @@ export function ChatMessages({
                 ) : (
                   <p className="whitespace-pre-wrap text-sm leading-relaxed text-fg">{t.text}</p>
                 ))}
-              {t.thinking && <ThinkingBlock text={t.thinking} />}
+              {t.thinking && <ThinkingBlock text={t.thinking} live={!t.text} />}
               {t.sources && t.sources.length > 0 && (
                 <div className="mt-1 flex flex-wrap gap-1.5">
                   {t.sources.map((s) =>
@@ -111,18 +111,20 @@ export function ChatMessages({
   );
 }
 
-function ThinkingBlock({ text }: { text: string }) {
+function ThinkingBlock({ text, live }: { text: string; live: boolean }) {
   const [open, setOpen] = useState(false);
+  const expanded = open || live; // auto-expand while the answer is still streaming
   return (
     <div className="mt-1">
       <button
         onClick={() => setOpen((o) => !o)}
         className="flex items-center gap-1 font-mono text-[10px] text-faint transition-colors hover:text-muted"
       >
-        <Brain size={11} /> {open ? "hide thinking" : "thinking"}
-        <ChevronDown size={10} className={open ? "rotate-180 transition-transform" : "transition-transform"} />
+        <Brain size={11} className={cn(live && "animate-pulse text-accent")} />
+        {live ? "thinking…" : expanded ? "hide thinking" : "thinking"}
+        <ChevronDown size={10} className={cn("transition-transform", expanded && "rotate-180")} />
       </button>
-      {open && (
+      {expanded && (
         <div className="mt-1 whitespace-pre-wrap rounded-md border border-line bg-bg/50 p-2.5 text-xs italic leading-relaxed text-muted">
           {text}
         </div>

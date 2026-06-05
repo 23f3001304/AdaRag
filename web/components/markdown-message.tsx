@@ -1,10 +1,47 @@
 "use client";
 
+import { Check, Copy } from "lucide-react";
+import { useState } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import remarkGfm from "remark-gfm";
 
+function CodeBlock({ language, code }: { language: string; code: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard.writeText(code).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+  return (
+    <div className="overflow-hidden rounded-lg border border-line">
+      <div className="flex items-center justify-between border-b border-line bg-panel-2 px-3 py-1.5">
+        <span className="font-mono text-[10px] uppercase tracking-wider text-faint">
+          {language || "code"}
+        </span>
+        <button
+          onClick={copy}
+          className="flex items-center gap-1 font-mono text-[10px] text-faint transition-colors hover:text-accent"
+        >
+          {copied ? <Check size={11} /> : <Copy size={11} />} {copied ? "copied" : "copy"}
+        </button>
+      </div>
+      <SyntaxHighlighter
+        language={language || "text"}
+        style={oneDark}
+        customStyle={{ margin: 0, background: "var(--color-bg)", fontSize: "12px", padding: "12px" }}
+        codeTagProps={{ style: { fontFamily: "var(--font-jetbrains), monospace" } }}
+      >
+        {code}
+      </SyntaxHighlighter>
+    </div>
+  );
+}
+
 // Render an assistant message as markdown: bold, lists, headings, blockquotes, tables, inline code,
-// and fenced code blocks - styled to the app's dark theme (no default prose).
+// and fenced code blocks with a language label, copy button, and syntax highlighting.
 const components: Components = {
   p: ({ children }) => <p className="text-sm leading-relaxed text-fg">{children}</p>,
   strong: ({ children }) => <strong className="font-semibold text-fg">{children}</strong>,
@@ -32,14 +69,15 @@ const components: Components = {
   blockquote: ({ children }) => (
     <blockquote className="border-l-2 border-accent/50 pl-3 italic text-muted">{children}</blockquote>
   ),
-  code: ({ children }) => (
-    <code className="rounded bg-panel-2 px-1 py-0.5 font-mono text-[12px] text-accent">{children}</code>
-  ),
-  pre: ({ children }) => (
-    <pre className="overflow-x-auto rounded-lg border border-line bg-bg p-3 font-mono text-[12px] leading-relaxed text-fg">
-      {children}
-    </pre>
-  ),
+  pre: ({ children }) => <>{children}</>,
+  code: ({ className, children }) => {
+    const match = /language-(\w+)/.exec(className || "");
+    const text = String(children).replace(/\n$/, "");
+    if (match || text.includes("\n")) return <CodeBlock language={match?.[1] ?? ""} code={text} />;
+    return (
+      <code className="rounded bg-panel-2 px-1 py-0.5 font-mono text-[12px] text-accent">{children}</code>
+    );
+  },
   hr: () => <hr className="my-1 border-line" />,
   table: ({ children }) => (
     <div className="overflow-x-auto">

@@ -1,6 +1,6 @@
 "use client";
 
-import { Boxes, Brain, X } from "lucide-react";
+import { Boxes, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { useBucket } from "@/components/bucket-context";
@@ -10,7 +10,6 @@ import { ChatMessages, type Source, type Turn } from "@/components/chat-messages
 import { ModePicker } from "@/components/mode-picker";
 import { type Resource, ResourceModal } from "@/components/resource-modal";
 import { type ModeOption, api, chatStream, citationsToSources } from "@/lib/api";
-import { cn } from "@/lib/cn";
 import { loadSkills, saveSkills, type Skill } from "@/lib/skills";
 
 interface Chat {
@@ -39,7 +38,6 @@ export default function ChatPage() {
   const [skills, setSkills] = useState<Skill[]>([]);
   const [activeSkill, setActiveSkill] = useState<Skill | null>(null);
   const [creating, setCreating] = useState(false);
-  const [thinking, setThinking] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const stop = () => abortRef.current?.abort();
@@ -206,9 +204,10 @@ export default function ChatPage() {
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     let started = false;
+    let q: string | undefined; // hold the search query until the bubble is created
     const grow = (fn: (t: Turn) => Turn) => {
       if (!started) {
-        pushAssistant(base, { role: "assistant", text: "" });
+        pushAssistant(base, { role: "assistant", text: "", query: q });
         started = true;
       }
       updateLast(fn);
@@ -218,9 +217,13 @@ export default function ChatPage() {
         { session_id: active.session, message: text, bucket, mode: active.mode, skill },
         ctrl.signal,
         {
-          query: (q) => grow((t) => ({ ...t, query: q })),
+          // Don't open the bubble on the query event - keep the dots until real content arrives.
+          query: (query) => {
+            q = query;
+            if (started) updateLast((t) => ({ ...t, query }));
+          },
           token: (tok) => grow((t) => ({ ...t, text: t.text + tok })),
-          thinking: (th) => thinking && grow((t) => ({ ...t, thinking: (t.thinking ?? "") + th })),
+          thinking: (th) => grow((t) => ({ ...t, thinking: (t.thinking ?? "") + th })),
           done: (cits) => grow((t) => ({ ...t, sources: citationsToSources(cits) })),
           error: (m) => grow((t) => ({ ...t, text: `${t.text}\n\n_error: ${m}_` })),
         },
@@ -247,23 +250,9 @@ export default function ChatPage() {
             {activeSkill && <Chip onClear={() => setActiveSkill(null)}>{activeSkill.name}</Chip>}
             {creating && <Chip onClear={() => setCreating(false)}>creating skill…</Chip>}
           </div>
-          <div className="flex shrink-0 items-center gap-3">
-            <button
-              onClick={() => setThinking((t) => !t)}
-              title="Show the model's reasoning under each answer"
-              className={cn(
-                "flex items-center gap-1 rounded-md border px-2 py-1 font-mono text-[10px] transition-colors",
-                thinking
-                  ? "border-accent/50 bg-accent/10 text-accent"
-                  : "border-line text-faint hover:text-muted",
-              )}
-            >
-              <Brain size={11} /> thinking
-            </button>
-            <span className="font-mono text-[10px] text-faint">
-              bucket: <span className="text-muted">{bucket}</span>
-            </span>
-          </div>
+          <span className="shrink-0 font-mono text-[10px] text-faint">
+            bucket: <span className="text-muted">{bucket}</span>
+          </span>
         </div>
         <div className="flex-1 space-y-5 overflow-y-auto p-6">
           <ChatMessages turns={active?.turns ?? []} busy={busy} bucket={bucket} onPreview={setPreview} />

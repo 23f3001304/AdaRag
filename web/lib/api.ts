@@ -101,7 +101,8 @@ export async function downloadFile(path: string, name: string): Promise<void> {
   document.body.appendChild(a);
   a.click();
   a.remove();
-  URL.revokeObjectURL(obj);
+  // Revoke late: revoking right after click() can truncate the download (corrupt file) in Chromium.
+  setTimeout(() => URL.revokeObjectURL(obj), 60_000);
 }
 
 // Dedupe citations to at most 5 distinct sources for the chat's source chips.
