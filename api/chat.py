@@ -11,9 +11,11 @@ router = APIRouter(tags=["chat"])
 class ChatRequest(BaseModel):
     session_id: str
     message: str
+    bucket: str = "default"
 
 
 @router.post("/chat")
 async def chat(request: Request, body: ChatRequest) -> dict:
-    """Answer one conversational turn, contextualizing it against the session's history."""
-    return await request.app.state.chat.chat(body.session_id, body.message)
+    """Answer one conversational turn in a bucket, contextualized against the session's history."""
+    chat_service = request.app.state.buckets.services(body.bucket).chat
+    return await chat_service.chat(body.session_id, body.message)

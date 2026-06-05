@@ -10,9 +10,11 @@ router = APIRouter(tags=["query"])
 
 class QueryRequest(BaseModel):
     query: str
+    bucket: str = "default"
 
 
 @router.post("/query")
 async def query(request: Request, body: QueryRequest) -> dict:
-    """Answer a question over the ingested corpus, with citations to source chunks."""
-    return await request.app.state.answer.answer(body.query)
+    """Answer a question over a bucket's corpus, with citations to source chunks."""
+    answer = request.app.state.buckets.services(body.bucket).answer
+    return await answer.answer(body.query)

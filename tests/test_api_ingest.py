@@ -36,11 +36,12 @@ class _FakeIngest:
 
 async def test_ingest_routes_upload_through_registry():
     registry, svc = _FakeRegistry(), _FakeIngest()
-    state = SimpleNamespace(registry=registry, ingest=svc)
+    buckets = SimpleNamespace(services=lambda bucket: SimpleNamespace(ingest=svc))
+    state = SimpleNamespace(registry=registry, buckets=buckets)
     request = SimpleNamespace(app=SimpleNamespace(state=state))
     upload = UploadFile(filename="note.txt", file=io.BytesIO(b"hello world"))
 
-    result = await ingest(request, upload)
+    result = await ingest(request, upload, bucket="default")
 
     assert result["document_id"] == "doc1"
     assert svc.call == ("note.txt", "hello world", "text", str(registry.seen))

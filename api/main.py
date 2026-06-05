@@ -6,59 +6,34 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from api.buckets import router as buckets_router
 from api.chat import router as chat_router
 from api.health import router as health_router
 from api.ingest import router as ingest_router
 from api.query import router as query_router
-from chunking.registry import build_chunker
+from core.buckets import BucketManager
 from core.config import get_settings
 from core.db import Database
-from core.pipeline import AnswerService, IngestService
-from enrichment.contextual import ContextualEnricher
-from enrichment.metadata import MetadataEnricher
 from index.qdrant_client import create_qdrant
-from index.qdrant_hybrid import QdrantIndex
 from ingestion.registry import build_registry
-from orchestrator.chat import ChatOrchestrator
 from providers.factory import ProviderFactory
-from rerank.cross_encoder import CrossEncoderReranker
-from retrieval.hybrid import HybridRetriever
-from retrieval.query_rewrite import HydeTransformer, QueryRewriter
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Build the services from config, ensure tables, and dispose clients on shutdown."""
+    """Build shared providers + the bucket manager, ensure tables, dispose clients on shutdown."""
     settings = get_settings()
     providers = ProviderFactory(settings)
-    embedder = providers.embeddings()
     db = Database(settings.database_url)
     qdrant = create_qdrant(settings.qdrant_url)
-    index = QdrantIndex(qdrant, settings.qdrant_collection)
-    chunker = build_chunker(settings.chunk_size, settings.chunk_overlap, settings.adaptive_chunking)
-    retriever = HybridRetriever(embedder, index, settings.rerank_candidates)
-    reranker = CrossEncoderReranker(settings.rerank_model)
-    llm = providers.llm()
-    # Registry preprocesses uploads of any modality (image -> caption+OCR, audio/video -> text).
+    # The registry preprocesses uploads (image -> caption+OCR, audio/video -> text) before ingest.
     registry = build_registry(providers.vision(), settings.ocr_provider)
-    enricher = ContextualEnricher(llm) if settings.enrich_context else None
-    metadata = MetadataEnricher(llm) if settings.enrich_metadata else None
-    transform = None
-    if settings.hyde:
-        transform = HydeTransformer(llm)
-    elif settings.rewrite_query:
-        transform = QueryRewriter(llm)
-    query_meta = MetadataEnricher(llm) if settings.metadata_filter else None
 
     await db.create_all()
     app.state.db = db
     app.state.qdrant = qdrant
     app.state.registry = registry
-    app.state.ingest = IngestService(chunker, embedder, index, db, enricher, metadata)
-    app.state.answer = AnswerService(
-        retriever, reranker, llm, settings.top_k, transform, query_meta
-    )
-    app.state.chat = ChatOrchestrator(app.state.answer, llm)
+    app.state.buckets = BucketManager(qdrant, db, settings, providers)
     try:
         yield
     finally:
@@ -71,6 +46,7 @@ app.include_router(health_router)
 app.include_router(ingest_router)
 app.include_router(query_router)
 app.include_router(chat_router)
+app.include_router(buckets_router)
 
 
 @app.get("/")

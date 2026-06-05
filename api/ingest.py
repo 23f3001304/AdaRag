@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, File, Request, UploadFile
+from fastapi import APIRouter, File, Form, Request, UploadFile
 
 router = APIRouter(tags=["ingest"])
 
@@ -13,7 +13,9 @@ _UPLOADS = Path("data/uploads")
 
 
 @router.post("/ingest")
-async def ingest(request: Request, file: UploadFile = File(...)) -> dict:
+async def ingest(
+    request: Request, file: UploadFile = File(...), bucket: str = Form("default")
+) -> dict:
     """Ingest one file of any supported modality (text/markdown, PDF, image, audio, video).
 
     The registry turns it into a text surrogate — image -> vision caption + OCR, audio/video ->
@@ -27,7 +29,8 @@ async def ingest(request: Request, file: UploadFile = File(...)) -> dict:
     dest.write_bytes(await file.read())
     try:
         doc = await state.registry.preprocess(dest)
-        return await state.ingest.ingest(name, doc.text, doc.modality, doc.original_path)
+        ingest_service = state.buckets.services(bucket).ingest
+        return await ingest_service.ingest(name, doc.text, doc.modality, doc.original_path)
     except Exception:
         dest.unlink(missing_ok=True)  # don't leave an orphan upload if preprocessing/indexing fails
         raise
