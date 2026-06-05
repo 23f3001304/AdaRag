@@ -45,6 +45,12 @@ export interface SkillOverride {
   top_k?: number;
 }
 
+// A chat "mode": a provider+model combo to switch the LLM for a request.
+export interface ModeOption {
+  provider: string;
+  model: string;
+}
+
 export interface TrialPoint {
   k: number;
   ndcg: number;
@@ -87,9 +93,10 @@ export const api = {
     req<{ bucket: string; status: string }>(`/buckets/${encodeURIComponent(name)}`, { method: "DELETE" }),
   query: (query: string, bucket = "default", skill?: SkillOverride) =>
     req<Answer>("/query", json({ query, bucket, skill })),
-  chat: (sessionId: string, message: string, bucket = "default", skill?: SkillOverride) =>
-    req<Answer>("/chat", json({ session_id: sessionId, message, bucket, skill })),
+  chat: (sessionId: string, message: string, bucket = "default", mode?: ModeOption) =>
+    req<Answer>("/chat", json({ session_id: sessionId, message, bucket, mode })),
   route: (message: string) => req<{ intent: "ingest" | "ask" }>("/route", json({ message })),
+  listModes: () => req<{ modes: ModeOption[] }>("/models"),
   optimizeRun: (bucket: string, trials = 20, max_queries = 12) =>
     req<{ started: boolean; running: boolean }>("/optimize/run", json({ bucket, trials, max_queries })),
   optimizeStatus: () => req<StudyState>("/optimize/status"),

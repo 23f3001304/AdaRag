@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
-from api.schemas import SkillOverride
+from api.schemas import ModeOverride, SkillOverride
 
 router = APIRouter(tags=["chat"])
 
@@ -15,16 +15,20 @@ class ChatRequest(BaseModel):
     message: str
     bucket: str = "default"
     skill: SkillOverride | None = None
+    mode: ModeOverride | None = None
 
 
 @router.post("/chat")
 async def chat(request: Request, body: ChatRequest) -> dict:
     """Answer one conversational turn in a bucket, contextualized against the session's history."""
-    chat_service = request.app.state.buckets.services(body.bucket).chat
+    buckets = request.app.state.buckets
+    chat_service = buckets.services(body.bucket).chat
     skill = body.skill
+    llm = buckets.llm_for(body.mode.provider, body.mode.model) if body.mode else None
     return await chat_service.chat(
         body.session_id,
         body.message,
         persona=skill.persona if skill else None,
         top_k=skill.top_k if skill else None,
+        llm=llm,
     )

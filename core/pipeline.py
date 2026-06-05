@@ -131,9 +131,14 @@ class AnswerService:
         self._query_meta = query_meta
 
     async def answer(
-        self, query: str, *, persona: str | None = None, top_k: int | None = None
+        self,
+        query: str,
+        *,
+        persona: str | None = None,
+        top_k: int | None = None,
+        llm: LLMProvider | None = None,
     ) -> dict:
-        """Answer a query; a skill may override the persona (system framing) and top_k depth."""
+        """Answer a query; a skill may override persona/top_k and a mode may override the LLM."""
         search = await self._transform.transform(query) if self._transform else query
         qfilter = None
         if self._query_meta is not None:
@@ -149,7 +154,7 @@ class AnswerService:
         prompt = _ANSWER_PROMPT.format(context=context, query=query)
         if persona and persona.strip():
             prompt = f"{persona.strip()}\n\n{prompt}"
-        answer = await self._llm.generate(prompt)
+        answer = await (llm or self._llm).generate(prompt)
         citations = [
             {
                 "n": i + 1,

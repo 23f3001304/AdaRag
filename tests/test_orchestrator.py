@@ -13,7 +13,7 @@ class _FakeAnswer:
         self.overrides: list[tuple[str | None, int | None]] = []
 
     async def answer(
-        self, query: str, *, persona: str | None = None, top_k: int | None = None
+        self, query: str, *, persona: str | None = None, top_k: int | None = None, llm=None
     ) -> dict:
         self.queries.append(query)
         self.overrides.append((persona, top_k))

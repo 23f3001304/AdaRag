@@ -26,6 +26,7 @@ from enrichment.metadata import MetadataEnricher
 from index.qdrant_hybrid import QdrantIndex
 from orchestrator.chat import ChatOrchestrator
 from providers.factory import ProviderFactory
+from providers.registry import build_llm
 from rerank.cross_encoder import CrossEncoderReranker
 from retrieval.hybrid import HybridRetriever
 from retrieval.query_rewrite import HydeTransformer, QueryRewriter
@@ -107,6 +108,27 @@ class BucketManager:
     def reranker(self) -> CrossEncoderReranker:
         """The shared cross-encoder reranker (reused by the optimizer)."""
         return self._reranker
+
+    def llm_for(self, provider: str, model: str) -> LLMProvider:
+        """Build an LLM for a specific provider+model (per-request chat model switching).
+
+        Under cli-bridge the choice is routed to the host bridge; otherwise it's built directly.
+        """
+        if self._s.llm_provider == "cli-bridge":
+            from providers.http_bridge import HttpBridgeLLM
+
+            return HttpBridgeLLM(self._s.cli_bridge_url, model, provider)
+        return build_llm(self._s.model_copy(update={"llm_provider": provider, "llm_model": model}))
+
+    async def available_modes(self) -> list[dict]:
+        """The provider+model combos available to switch between (from the bridge, if used)."""
+        if self._s.llm_provider == "cli-bridge":
+            from providers.http_bridge import bridge_models
+
+            with contextlib.suppress(Exception):
+                return await bridge_models(self._s.cli_bridge_url)
+            return []
+        return [{"provider": self._s.llm_provider, "model": self._s.llm_model}]
 
     def _index(self, bucket: str) -> QdrantIndex:
         return QdrantIndex(self._qdrant, collection_name(self._s.qdrant_collection, bucket))

@@ -13,3 +13,10 @@ class SkillOverride(BaseModel):
 
     persona: str | None = None
     top_k: int | None = None
+
+
+class ModeOverride(BaseModel):
+    """A chat 'mode': switch the LLM to a specific provider+model for this request."""
+
+    provider: str
+    model: str

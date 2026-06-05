@@ -12,6 +12,7 @@ from api.documents import router as documents_router
 from api.files import router as files_router
 from api.health import router as health_router
 from api.ingest import router as ingest_router
+from api.models import router as models_router
 from api.optimize import router as optimize_router
 from api.query import router as query_router
 from api.route import router as route_router
@@ -60,6 +61,7 @@ app.include_router(buckets_router)
 app.include_router(documents_router)
 app.include_router(files_router)
 app.include_router(optimize_router)
+app.include_router(models_router)
 
 
 @app.get("/")

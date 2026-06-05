@@ -67,19 +67,21 @@ class ChatOrchestrator:
         *,
         persona: str | None = None,
         top_k: int | None = None,
+        llm: LLMProvider | None = None,
     ) -> dict:
         """Answer one turn in a session; rewrites follow-ups to standalone queries first.
 
-        An applied skill may pass a ``persona`` (system framing) and ``top_k`` (retrieval depth).
-        A greeting / small talk answers directly (no retrieval, no citations, no search query).
+        A skill may pass a ``persona`` and ``top_k``; a chat mode may pass an ``llm`` to switch the
+        model. A greeting / small talk answers directly (no retrieval, citations, or search query).
         """
+        gen = llm or self._llm
         history = self._sessions[session_id]
         if _is_chitchat(message):
-            reply = (await self._llm.generate(_CHITCHAT_PROMPT.format(message=message))).strip()
+            reply = (await gen.generate(_CHITCHAT_PROMPT.format(message=message))).strip()
             history.append((message, reply))
             return {"answer": reply, "citations": [], "search_query": None}
-        query = await self._contextualize(message, history) if history else message
-        result = await self._answer.answer(query, persona=persona, top_k=top_k)
+        query = await self._contextualize(message, history, gen) if history else message
+        result = await self._answer.answer(query, persona=persona, top_k=top_k, llm=llm)
         history.append((message, result["answer"]))
         return {
             "answer": result["answer"],
@@ -87,9 +89,11 @@ class ChatOrchestrator:
             "search_query": query,  # surfaced so the rewrite is inspectable
         }
 
-    async def _contextualize(self, message: str, history: deque[tuple[str, str]]) -> str:
+    async def _contextualize(
+        self, message: str, history: deque[tuple[str, str]], llm: LLMProvider
+    ) -> str:
         """Rewrite a follow-up into a standalone query from history (else the message)."""
         convo = "\n".join(f"User: {user}\nAssistant: {ans}" for user, ans in history)
         prompt = _CONTEXTUALIZE_PROMPT.format(history=convo, message=message)
-        rewritten = (await self._llm.generate(prompt)).strip()
+        rewritten = (await llm.generate(prompt)).strip()
         return rewritten or message

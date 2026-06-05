@@ -8,8 +8,9 @@ import { useBucket } from "@/components/bucket-context";
 import { ChatComposer } from "@/components/chat-composer";
 import { ChatList } from "@/components/chat-list";
 import { Logo } from "@/components/logo";
+import { ModePicker } from "@/components/mode-picker";
 import { type Resource, ResourceModal } from "@/components/resource-modal";
-import { api } from "@/lib/api";
+import { type ModeOption, api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 
 interface Source {
@@ -29,6 +30,7 @@ interface Chat {
   title: string;
   session: string;
   turns: Turn[];
+  mode?: ModeOption; // per-chat model, survives across the conversation
 }
 
 const KEY = "adarag.chats";
@@ -45,7 +47,15 @@ export default function ChatPage() {
   const [activeId, setActiveId] = useState("");
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState<Resource | null>(null);
+  const [modes, setModes] = useState<ModeOption[]>([]);
   const endRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    api
+      .listModes()
+      .then((r) => setModes(r.modes))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     let saved: Chat[] = [];
@@ -64,6 +74,8 @@ export default function ChatPage() {
     setChats(next);
     localStorage.setItem(KEY, JSON.stringify(next));
   };
+  const setChatMode = (mode: ModeOption | undefined) =>
+    persist(chats.map((c) => (c.id === activeId ? { ...c, mode } : c)));
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -110,7 +122,7 @@ export default function ChatPage() {
           return;
         }
       }
-      const r = await api.chat(active.session, text, bucket);
+      const r = await api.chat(active.session, text, bucket, active.mode);
       const seen = new Set<string>();
       const sources: Source[] = [];
       for (const c of r.citations) {
@@ -142,7 +154,8 @@ export default function ChatPage() {
       />
 
       <div className="flex min-w-0 flex-1 flex-col rounded-xl border border-line bg-panel/30">
-        <div className="flex items-center justify-end border-b border-line px-4 py-2">
+        <div className="flex items-center justify-between gap-2 border-b border-line px-4 py-2">
+          <ModePicker modes={modes} value={active?.mode} onChange={setChatMode} />
           <span className="font-mono text-[10px] text-faint">
             bucket: <span className="text-muted">{bucket}</span>
           </span>
