@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from api.chat import router as chat_router
 from api.health import router as health_router
 from api.ingest import router as ingest_router
 from api.query import router as query_router
@@ -18,6 +19,7 @@ from enrichment.metadata import MetadataEnricher
 from index.qdrant_client import create_qdrant
 from index.qdrant_hybrid import QdrantIndex
 from ingestion.registry import build_registry
+from orchestrator.chat import ChatOrchestrator
 from providers.factory import ProviderFactory
 from rerank.cross_encoder import CrossEncoderReranker
 from retrieval.hybrid import HybridRetriever
@@ -56,6 +58,7 @@ async def lifespan(app: FastAPI):
     app.state.answer = AnswerService(
         retriever, reranker, llm, settings.top_k, transform, query_meta
     )
+    app.state.chat = ChatOrchestrator(app.state.answer, llm)
     try:
         yield
     finally:
@@ -67,6 +70,7 @@ app = FastAPI(title="AdaRag", version="0.1.0", lifespan=lifespan)
 app.include_router(health_router)
 app.include_router(ingest_router)
 app.include_router(query_router)
+app.include_router(chat_router)
 
 
 @app.get("/")
