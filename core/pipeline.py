@@ -125,6 +125,7 @@ class IngestService:
             questions = await detector.analyze(text, modality, entities)
         except Exception:
             return  # detection must never break an ingest
+        await self._clarifications.drop_pending(self._bucket, source)
         for q in questions:
             await self._clarifications.create(
                 self._bucket, doc_id, source, modality, "", q.question, q.candidates

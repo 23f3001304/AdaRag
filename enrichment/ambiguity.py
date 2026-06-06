@@ -16,16 +16,55 @@ from core.json_extract import extract_json
 _PROMPT = """A file was added to a knowledge base. List only the questions a person must still
 answer to make it findable - who or what it shows, and key context - that the content does NOT
 already state. For a race photo that names nobody: the rider, the bike brand, the event, who won.
-Skip anything the content already states. Draw candidate answers from the known entities.
+Skip anything the content already states.
+
+Each question must ask about a DISTINCT thing. Do not rephrase the same question - one question
+per fact (rider, brand, event, winner are four facts, but "name of the rider" and "who is the
+person" are the same fact, so ask once).
+
+For candidates: only include known entities that are a real, plausible answer to THIS specific
+question. If no known entity fits, return an empty array - do NOT pad with unrelated entities.
 
 Known entities in the knowledge base: {entities}
 
-Reply with JSON only. Ask 0 to 4 questions; ask none if the content already states what it shows:
-{{"questions": [{{"question": "<short>", "candidates": [<entities that may answer it>]}}]}}
+Reply with JSON only. Ask 0 to 4 distinct questions; ask none if the content already names its
+subject and key context:
+{{"questions": [{{"question": "<short>", "candidates": [<entities that actually answer it>]}}]}}
 
 Modality: {modality}
 Content:
 {text}"""
+
+# Function words + medium/subject markers ("photo", "image", "this", "shown") that describe HOW
+# a question references the file, not WHAT it asks. Content nouns ("person", "event", "name",
+# "brand") stay - those are the asked-for facts that distinguish questions.
+_STOP = frozenset(
+    "the a an of in on at to for from with about by is are was were be been being am "
+    "do does did have has had can could should would will may might shall "
+    "it its this that these those their they them his her your "
+    "what who which when where why how whose and or but not so if then any some "
+    "photo image picture video file document shown depicted seen visible here there".split()
+)
+
+
+def _fingerprint(question: str) -> frozenset[str]:
+    """Content tokens of a question - two questions are dupes when these overlap heavily."""
+    return frozenset(
+        w
+        for raw in question.lower().split()
+        if (w := "".join(c for c in raw if c.isalnum())) and w not in _STOP and len(w) > 2
+    )
+
+
+def _is_duplicate(a: frozenset[str], b: frozenset[str]) -> bool:
+    """A question is a dup of an earlier one when their content tokens overlap by >=75%.
+
+    Conservative on purpose - "name of the person" and "event of the person" share {person} but ask
+    for distinct facts; the dedup should only kill genuine rephrasings of the same question.
+    """
+    if not a or not b:
+        return not a and not b  # both empty (only stopwords) -> consider them the same shape
+    return len(a & b) / min(len(a), len(b)) >= 0.75
 
 
 @dataclass(frozen=True)
@@ -56,12 +95,19 @@ class AmbiguityDetector:
             return []
         known = set(entities)
         out: list[Question] = []
-        for item in raw[:4]:
+        seen: list[frozenset[str]] = []
+        for item in raw[:6]:
             if not isinstance(item, dict):
                 continue
             question = str(item.get("question") or "").strip()
             if not question:
                 continue
+            fp = _fingerprint(question)
+            if any(_is_duplicate(fp, s) for s in seen):
+                continue
+            seen.append(fp)
             cands = [s for c in (item.get("candidates") or []) if (s := str(c).strip()) in known]
             out.append(Question(question=question, candidates=cands))
+            if len(out) >= 4:
+                break
         return out

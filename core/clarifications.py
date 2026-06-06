@@ -82,3 +82,19 @@ class ClarificationStore:
             for row in (await session.execute(query)).scalars():
                 await session.delete(row)
             await session.commit()
+
+    async def drop_pending(self, bucket: str, source: str) -> None:
+        """Drop pending clarifications for a (bucket, source) - used when re-ingesting a file.
+
+        Answered/dismissed rows stay (their retag is applied to the new doc by the user's choice).
+        """
+        query = (
+            select(Clarification)
+            .where(Clarification.bucket == bucket)
+            .where(Clarification.source == source)
+            .where(Clarification.status == "pending")
+        )
+        async with self._db.session() as session:
+            for row in (await session.execute(query)).scalars():
+                await session.delete(row)
+            await session.commit()
