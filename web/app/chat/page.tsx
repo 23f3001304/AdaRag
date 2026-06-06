@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { AgentToggle } from "@/components/agent-toggle";
+import { type Scope, ScopeSwitch } from "@/components/scope-switch";
 import { useBucket } from "@/components/bucket-context";
 import { ChatComposer } from "@/components/chat-composer";
 import { ChatList } from "@/components/chat-list";
@@ -24,6 +25,7 @@ interface Chat {
   turns: Turn[];
   mode?: ModeOption;
   agent?: boolean;
+  scope?: Scope;
 }
 
 const KEY = "adarag.chats";
@@ -100,6 +102,8 @@ export default function ChatPage() {
     persist(chats.map((c) => (c.id === activeId ? { ...c, mode } : c)));
   const toggleAgent = () =>
     persist(chats.map((c) => (c.id === activeId ? { ...c, agent: !c.agent } : c)));
+  const setScope = (scope: Scope) =>
+    persist(chats.map((c) => (c.id === activeId ? { ...c, scope } : c)));
   const select = (id: string) => {
     setActiveId(id);
     setActiveSkill(null);
@@ -245,7 +249,7 @@ export default function ChatPage() {
     currentJob.current = messageId;
     await driveChat({
       messageId,
-      fresh: { session_id: active.session, message: text, bucket, mode: active.mode, skill, agent: !!active.agent },
+      fresh: { session_id: active.session, message: text, bucket, mode: active.mode, skill, agent: !!active.agent, scope: active.scope ?? "strict" },
       signal: ctrl.signal,
       ensure: (query) =>
         pushAssistant(base, { role: "assistant", text: "", query, pending: true, jobId: messageId }),
@@ -266,6 +270,7 @@ export default function ChatPage() {
           <div className="flex min-w-0 items-center gap-2">
             <ModePicker modes={modes} value={active?.mode} onChange={setChatMode} />
             <AgentToggle on={!!active?.agent} onToggle={toggleAgent} />
+            <ScopeSwitch value={active?.scope ?? "strict"} onChange={setScope} />
             {activeSkill && <Chip onClear={() => setActiveSkill(null)}>{activeSkill.name}</Chip>}
             {creating && <Chip onClear={() => setCreating(false)}>creating skill…</Chip>}
           </div>

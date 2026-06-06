@@ -12,6 +12,7 @@ from core.db import Database
 from core.interfaces import EmbeddingProvider, LLMProvider
 from core.models import Chunk as ChunkRow
 from core.models import Document
+from core.prompts import answer_prompt as _answer_prompt
 from enrichment.ambiguity import AmbiguityDetector
 from enrichment.contextual import ContextualEnricher
 from enrichment.metadata import ChunkMetadata, MetadataEnricher
@@ -167,16 +168,6 @@ class IngestService:
         return "\n\n".join(p for p in (context, text, terms) if p)
 
 
-_ANSWER_PROMPT = """Answer the question using only the context below. Cite sources inline as [n].
-If the context does not contain the answer, say you don't know.
-
-Context:
-{context}
-
-Question: {query}
-
-Answer:"""
-
 _NO_DOCS = "No documents have been ingested yet."
 
 _REASON_PROMPT = """In 2-3 short sentences, explain how you reached this answer from the sources
@@ -228,12 +219,13 @@ class AnswerService:
         top_k: int | None = None,
         llm: LLMProvider | None = None,
         thinking: bool = False,
+        scope: str = "strict",
     ) -> dict:
         """Answer a query; a skill may override persona/top_k and a mode may override the LLM."""
         hits = await self._rank(query, top_k)
         if not hits:
             return {"answer": _NO_DOCS, "citations": [], "thinking": None}
-        prompt, citations = self._build(query, hits, persona)
+        prompt, citations = self._build(query, hits, persona, scope)
         gen = llm or self._llm
         if thinking:
             answer, think = await _answer_with_thinking(gen, prompt, query)
@@ -248,6 +240,7 @@ class AnswerService:
         persona: str | None = None,
         top_k: int | None = None,
         llm: LLMProvider | None = None,
+        scope: str = "strict",
     ):
         """Stream the answer as {type: text|thinking|done} events; citations ride the done event."""
         hits = await self._rank(query, top_k)
@@ -255,7 +248,7 @@ class AnswerService:
             yield {"type": "text", "text": _NO_DOCS}
             yield {"type": "done", "citations": []}
             return
-        prompt, citations = self._build(query, hits, persona)
+        prompt, citations = self._build(query, hits, persona, scope)
         gen = llm or self._llm
         if hasattr(gen, "stream"):
             async for event in gen.stream(prompt):
@@ -280,10 +273,12 @@ class AnswerService:
         return _diversify(ranked, k)
 
     @staticmethod
-    def _build(query: str, hits: list, persona: str | None) -> tuple[str, list[dict]]:
+    def _build(
+        query: str, hits: list, persona: str | None, scope: str = "strict"
+    ) -> tuple[str, list[dict]]:
         """Build the answer prompt (with persona) and the citation list from reranked hits."""
         context = "\n\n".join(f"[{i + 1}] ({h.source}) {h.text}" for i, h in enumerate(hits))
-        prompt = _ANSWER_PROMPT.format(context=context, query=query)
+        prompt = _answer_prompt(scope).format(context=context, query=query)
         if persona and persona.strip():
             prompt = f"{persona.strip()}\n\n{prompt}"
         citations = [

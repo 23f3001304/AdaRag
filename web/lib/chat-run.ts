@@ -43,6 +43,7 @@ export interface DriveOpts {
     mode?: ModeOption;
     skill?: SkillOverride;
     agent?: boolean;
+    scope?: "strict" | "medium" | "lazy";
   } | null;
   signal: AbortSignal;
   ensure: (query: string | undefined) => void; // create the pending assistant turn (fresh only)

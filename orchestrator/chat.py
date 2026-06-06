@@ -78,12 +78,9 @@ class ChatOrchestrator:
         top_k: int | None = None,
         llm: LLMProvider | None = None,
         thinking: bool = False,
+        scope: str = "strict",
     ) -> dict:
-        """Answer one turn in a session; rewrites follow-ups to standalone queries first.
-
-        A skill may pass a ``persona`` and ``top_k``; a mode may pass an ``llm``; ``thinking`` adds
-        the model's reasoning. A greeting answers directly (no retrieval, citations, or thinking).
-        """
+        """Answer one turn in a session; rewrites follow-ups to standalone queries first."""
         gen = llm or self._llm
         history = self._sessions[session_id]
         if _is_chitchat(message):
@@ -92,7 +89,7 @@ class ChatOrchestrator:
             return {"answer": reply, "citations": [], "search_query": None, "thinking": None}
         query = await self._contextualize(message, history, gen) if history else message
         result = await self._answer.answer(
-            query, persona=persona, top_k=top_k, llm=llm, thinking=thinking
+            query, persona=persona, top_k=top_k, llm=llm, thinking=thinking, scope=scope
         )
         history.append((message, result["answer"]))
         return {
@@ -110,6 +107,7 @@ class ChatOrchestrator:
         persona: str | None = None,
         top_k: int | None = None,
         llm: LLMProvider | None = None,
+        scope: str = "strict",
     ):
         """Stream a turn as events: {type: query|text|thinking|done}; history updated at the end."""
         gen = llm or self._llm
@@ -126,7 +124,9 @@ class ChatOrchestrator:
         query = await self._contextualize(message, history, gen) if history else message
         yield {"type": "query", "text": query}
         full = ""
-        async for event in self._answer.answer_stream(query, persona=persona, top_k=top_k, llm=llm):
+        async for event in self._answer.answer_stream(
+            query, persona=persona, top_k=top_k, llm=llm, scope=scope
+        ):
             if event.get("type") == "done":
                 yield {"type": "done", "citations": event["citations"], "search_query": query}
             else:

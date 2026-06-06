@@ -193,6 +193,7 @@ export async function chatStream(
     mode?: ModeOption;
     skill?: SkillOverride;
     agent?: boolean;
+    scope?: "strict" | "medium" | "lazy";
   },
   signal: AbortSignal | undefined,
   on: StreamHandlers,

@@ -30,6 +30,7 @@ class ChatRequest(BaseModel):
     mode: ModeOverride | None = None
     thinking: bool = False
     agent: bool = False  # per-chat agent mode flag; slice 2B wires --permission-prompt-tool
+    scope: str = "strict"  # answer scope: strict (context only) | medium (+general) | lazy (open)
 
 
 def _sse(events: AsyncIterator[dict]) -> StreamingResponse:
@@ -56,6 +57,7 @@ async def chat(request: Request, body: ChatRequest) -> dict:
         top_k=skill.top_k if skill else None,
         llm=llm,
         thinking=body.thinking,
+        scope=body.scope,
     )
 
 
@@ -74,6 +76,7 @@ async def chat_stream(request: Request, body: ChatRequest) -> StreamingResponse:
         persona=skill.persona if skill else None,
         top_k=skill.top_k if skill else None,
         llm=llm,
+        scope=body.scope,
     )
     job = request.app.state.chat_jobs.start(body.message_id, gen)
     return _sse(job.observe())
