@@ -17,6 +17,12 @@ __pycache__/
 DESIGN.md
 evaluation/corpus/design.txt
 
+# Local-only markdown - kept on disk for the author, not tracked. Only README.md ships.
+CONVENTIONS.md
+evaluation/BASELINE.md
+web/AGENTS.md
+web/CLAUDE.md
+
 # Scraped web corpus (local test data — large, not committed)
 evaluation/corpus/web_*.txt
 
