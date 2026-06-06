@@ -16,12 +16,19 @@ only on a trusted network: this runs your authenticated CLIs and can edit your .
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import re
 import shutil
 import sys
 from pathlib import Path
+
+# uvicorn --reload on Windows falls back to a Selector-based loop which can't spawn subprocesses
+# (we'd get NotImplementedError from asyncio.create_subprocess_exec when calling the CLIs). Force
+# the Proactor policy at import time before uvicorn builds its loop.
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 import httpx
 from fastapi import FastAPI
@@ -231,7 +238,8 @@ async def stream(body: GenerateIn) -> StreamingResponse:
                 text = await llm.generate(body.prompt, system=body.system)
                 yield f"data: {json.dumps({'type': 'text', 'text': text})}\n\n"
         except Exception as exc:
-            yield f"data: {json.dumps({'type': 'error', 'text': str(exc)})}\n\n"
+            msg = str(exc) or f"{type(exc).__name__}"
+            yield f"data: {json.dumps({'type': 'error', 'text': msg})}\n\n"
         yield 'data: {"type": "done"}\n\n'
 
     return StreamingResponse(events(), media_type="text/event-stream")
