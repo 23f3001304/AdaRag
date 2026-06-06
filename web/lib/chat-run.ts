@@ -42,6 +42,7 @@ export interface DriveOpts {
     bucket: string;
     mode?: ModeOption;
     skill?: SkillOverride;
+    agent?: boolean;
   } | null;
   signal: AbortSignal;
   ensure: (query: string | undefined) => void; // create the pending assistant turn (fresh only)

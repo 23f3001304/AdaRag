@@ -176,6 +176,7 @@ export async function chatStream(
     bucket: string;
     mode?: ModeOption;
     skill?: SkillOverride;
+    agent?: boolean;
   },
   signal: AbortSignal | undefined,
   on: StreamHandlers,

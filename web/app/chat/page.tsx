@@ -1,12 +1,13 @@
 "use client";
 
-import { Boxes, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { AgentToggle } from "@/components/agent-toggle";
 import { useBucket } from "@/components/bucket-context";
 import { ChatComposer } from "@/components/chat-composer";
 import { ChatList } from "@/components/chat-list";
 import { ChatMessages, type Turn } from "@/components/chat-messages";
+import { Chip } from "@/components/chip";
 import { useIngest } from "@/components/ingest-context";
 import { ModePicker } from "@/components/mode-picker";
 import { useNotify } from "@/components/notification-context";
@@ -22,6 +23,7 @@ interface Chat {
   session: string;
   turns: Turn[];
   mode?: ModeOption;
+  agent?: boolean;
 }
 
 const KEY = "adarag.chats";
@@ -96,6 +98,8 @@ export default function ChatPage() {
   };
   const setChatMode = (mode: ModeOption | undefined) =>
     persist(chats.map((c) => (c.id === activeId ? { ...c, mode } : c)));
+  const toggleAgent = () =>
+    persist(chats.map((c) => (c.id === activeId ? { ...c, agent: !c.agent } : c)));
   const select = (id: string) => {
     setActiveId(id);
     setActiveSkill(null);
@@ -241,7 +245,7 @@ export default function ChatPage() {
     currentJob.current = messageId;
     await driveChat({
       messageId,
-      fresh: { session_id: active.session, message: text, bucket, mode: active.mode, skill },
+      fresh: { session_id: active.session, message: text, bucket, mode: active.mode, skill, agent: !!active.agent },
       signal: ctrl.signal,
       ensure: (query) =>
         pushAssistant(base, { role: "assistant", text: "", query, pending: true, jobId: messageId }),
@@ -261,6 +265,7 @@ export default function ChatPage() {
         <div className="flex items-center justify-between gap-2 border-b border-line px-4 py-2">
           <div className="flex min-w-0 items-center gap-2">
             <ModePicker modes={modes} value={active?.mode} onChange={setChatMode} />
+            <AgentToggle on={!!active?.agent} onToggle={toggleAgent} />
             {activeSkill && <Chip onClear={() => setActiveSkill(null)}>{activeSkill.name}</Chip>}
             {creating && <Chip onClear={() => setCreating(false)}>creating skill…</Chip>}
           </div>
@@ -287,14 +292,3 @@ export default function ChatPage() {
   );
 }
 
-function Chip({ children, onClear }: { children: React.ReactNode; onClear: () => void }) {
-  return (
-    <span className="flex items-center gap-1 rounded border border-accent/40 bg-accent/10 px-2 py-1 text-xs text-accent">
-      <Boxes size={11} />
-      <span className="max-w-32 truncate">{children}</span>
-      <button onClick={onClear} className="transition-colors hover:text-fg">
-        <X size={11} />
-      </button>
-    </span>
-  );
-}

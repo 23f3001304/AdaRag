@@ -29,6 +29,7 @@ class ChatRequest(BaseModel):
     skill: SkillOverride | None = None
     mode: ModeOverride | None = None
     thinking: bool = False
+    agent: bool = False  # per-chat agent mode flag; slice 2B wires --permission-prompt-tool
 
 
 def _sse(events: AsyncIterator[dict]) -> StreamingResponse:
