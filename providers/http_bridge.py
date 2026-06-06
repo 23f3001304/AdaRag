@@ -46,16 +46,21 @@ class HttpBridgeLLM:
     without one it uses the bridge's default host LLM.
     """
 
-    def __init__(self, base_url: str, model: str = "", provider: str = "") -> None:
+    def __init__(
+        self, base_url: str, model: str = "", provider: str = "", agent: bool = False
+    ) -> None:
         self.model = model
         self._provider = provider
         self._url = base_url.rstrip("/")
+        self._agent = agent
 
     def _payload(self, prompt: str, system: str | None) -> dict:
         payload: dict = {"prompt": prompt, "system": system}
         if self._provider and self.model:
             payload["provider"] = self._provider
             payload["model"] = self.model
+        if self._agent:  # opt this request into agent mode (claude-cli tool use)
+            payload["agent"] = True
         return payload
 
     async def generate(self, prompt: str, *, system: str | None = None) -> str:

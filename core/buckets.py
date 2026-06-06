@@ -124,15 +124,16 @@ class BucketManager:
         """Apply a clarification answer: weave the chosen entity into the document's chunks."""
         return await retag_document(self._index(bucket), self._embedder, doc_id, entity)
 
-    def llm_for(self, provider: str, model: str) -> LLMProvider:
+    def llm_for(self, provider: str, model: str, agent: bool = False) -> LLMProvider:
         """Build an LLM for a specific provider+model (per-request chat model switching).
 
         Under cli-bridge the choice is routed to the host bridge; otherwise it's built directly.
+        `agent` opts the request into tool use via the bridge's claude-cli --allowed-tools.
         """
         if self._s.llm_provider == "cli-bridge":
             from providers.http_bridge import HttpBridgeLLM
 
-            return HttpBridgeLLM(self._s.cli_bridge_url, model, provider)
+            return HttpBridgeLLM(self._s.cli_bridge_url, model, provider, agent)
         return build_llm(self._s.model_copy(update={"llm_provider": provider, "llm_model": model}))
 
     async def available_modes(self) -> list[dict]:

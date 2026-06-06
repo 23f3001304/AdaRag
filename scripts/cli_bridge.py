@@ -76,6 +76,7 @@ class GenerateIn(BaseModel):
     provider: str | None = None  # optional per-request override (chat model switching)
     model: str | None = None
     thinking: bool = False  # ask reasoning models (ollama qwen3) to return their thinking
+    agent: bool = False  # claude-cli only: enable a safe tool set for agentic work
 
 
 class VisionIn(BaseModel):
@@ -216,10 +217,15 @@ async def stream(body: GenerateIn) -> StreamingResponse:
     """Stream a generation as SSE lines: `data: {"type": text|thinking|done|error, "text": ...}`."""
     llm = _llm_for(body.provider, body.model) if body.provider and body.model else _state.llm
 
+    # agent only matters for the claude CLI; other providers ignore the kwarg.
+    stream_kwargs: dict = {"system": body.system}
+    if body.agent:
+        stream_kwargs["agent"] = True
+
     async def events():
         try:
             if hasattr(llm, "stream"):
-                async for ev in llm.stream(body.prompt, system=body.system):
+                async for ev in llm.stream(body.prompt, **stream_kwargs):
                     yield f"data: {json.dumps(ev)}\n\n"
             else:  # provider without streaming: emit the whole answer at once
                 text = await llm.generate(body.prompt, system=body.system)

@@ -46,7 +46,9 @@ async def chat(request: Request, body: ChatRequest) -> dict:
     buckets = request.app.state.buckets
     chat_service = buckets.services(body.bucket).chat
     skill = body.skill
-    llm = buckets.llm_for(body.mode.provider, body.mode.model) if body.mode else None
+    llm = (
+        buckets.llm_for(body.mode.provider, body.mode.model, body.agent) if body.mode else None
+    )
     return await chat_service.chat(
         body.session_id,
         body.message,
@@ -63,7 +65,9 @@ async def chat_stream(request: Request, body: ChatRequest) -> StreamingResponse:
     buckets = request.app.state.buckets
     chat_service = buckets.services(body.bucket).chat
     skill = body.skill
-    llm = buckets.llm_for(body.mode.provider, body.mode.model) if body.mode else None
+    llm = (
+        buckets.llm_for(body.mode.provider, body.mode.model, body.agent) if body.mode else None
+    )
     gen = chat_service.chat_stream(
         body.session_id,
         body.message,

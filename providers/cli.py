@@ -113,13 +113,15 @@ class ClaudeCodeLLM:
         _record_usage(data)
         return data["result"]
 
-    async def stream(self, prompt: str, *, system: str | None = None):
-        """Yield {type: text|thinking, text} deltas from `claude -p --output-format stream-json`."""
+    async def stream(self, prompt: str, *, system: str | None = None, agent: bool = False):
+        """Yield deltas from claude-cli; agent=True opens a safe tool set for agentic work."""
         text = f"{system}\n\n{prompt}" if system else prompt
         argv = [self._binary, "-p", "--output-format", "stream-json", "--verbose"]
         argv += ["--include-partial-messages"]
         if self.model:
             argv += ["--model", self.model]
+        if agent:
+            argv += ["--allowed-tools", "Read Glob Grep Bash Edit Write"]
         async for raw in _stream_lines(argv, text):
             raw = raw.strip()
             if not raw:
@@ -129,7 +131,18 @@ class ClaudeCodeLLM:
             except json.JSONDecodeError:
                 continue
             event = ev.get("event", {}) if ev.get("type") == "stream_event" else {}
-            if event.get("type") != "content_block_delta":
+            kind = event.get("type")
+            if kind == "content_block_start":
+                # The model is about to use a tool (agent mode) - surface it to the UI.
+                block = event.get("content_block", {})
+                if block.get("type") == "tool_use":
+                    yield {
+                        "type": "tool_use",
+                        "name": block.get("name", ""),
+                        "input": block.get("input", {}),
+                    }
+                continue
+            if kind != "content_block_delta":
                 continue
             delta = event.get("delta", {})
             if delta.get("type") == "text_delta" and delta.get("text"):
