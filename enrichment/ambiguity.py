@@ -13,23 +13,31 @@ from dataclasses import dataclass, field
 from core.interfaces import LLMProvider
 from core.json_extract import extract_json
 
-_PROMPT = """A file was added to a knowledge base. List only the questions a person must still
-answer to make it findable - who or what it shows, and key context - that the content does NOT
-already state. For a race photo that names nobody: the rider, the bike brand, the event, who won.
-Skip anything the content already states.
+_PROMPT = """A file was added to a knowledge base. The Content below already describes what is
+visible / present. Your job: list questions whose answers are NOT in the Content but would help
+someone find this file later by who/what/where/when/why - identity and context, not description.
 
-Each question must ask about a DISTINCT thing. Do not rephrase the same question - one question
-per fact (rider, brand, event, winner are four facts, but "name of the rider" and "who is the
-person" are the same fact, so ask once).
+Ask about:
+- WHO the unnamed subject is (when the Content describes someone but does not name them).
+- WHERE the Content was created or what place it depicts (when not stated).
+- WHEN it was created, or the date / event it captures (when not stated).
+- WHAT named occasion or work this file relates to (project, paper, trip, meeting) when relevant.
 
-For candidates: only include known entities that are a real, plausible answer to THIS specific
-question. If no known entity fits, return an empty array - do NOT pad with unrelated entities.
+NEVER ask about:
+- Visible attributes the Content already describes (color of clothing, what someone is holding,
+  the shape of an object). The Content already has those - they are not missing.
+- Things the Content never mentions. Do not invent subjects (no bikes if no bike is shown, no
+  events if no event is described).
+- The same fact phrased two ways.
+
+For candidates: only include known entities that plausibly answer THIS specific question. Empty
+array is fine and expected when no known entity fits.
 
 Known entities in the knowledge base: {entities}
 
-Reply with JSON only. Ask 0 to 4 distinct questions; ask none if the content already names its
-subject and key context:
-{{"questions": [{{"question": "<short>", "candidates": [<entities that actually answer it>]}}]}}
+Reply with JSON only. Ask 0 to 4 questions; ask 0 when the Content already names its subject and
+the key identity/context facts:
+{{"questions": [{{"question": "<short>", "candidates": [<entities that fit>]}}]}}
 
 Modality: {modality}
 Content:
