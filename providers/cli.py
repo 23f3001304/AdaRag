@@ -173,7 +173,8 @@ class ClaudeCodeLLM:
                 ev = json.loads(raw)
             except json.JSONDecodeError:
                 continue
-            yield from _parse_claude_event(ev)
+            for parsed in _parse_claude_event(ev):
+                yield parsed
 
 
 class GeminiCLILLM:
