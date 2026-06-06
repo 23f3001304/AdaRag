@@ -69,6 +69,15 @@ export async function driveChat(opts: DriveOpts): Promise<void> {
     },
     token: (tok) => grow((t) => ({ ...t, text: t.text + tok })),
     thinking: (th) => grow((t) => ({ ...t, thinking: (t.thinking ?? "") + th })),
+    toolUse: (use) =>
+      grow((t) => ({ ...t, tools: [...(t.tools ?? []), { id: use.id, name: use.name, input: use.input }] })),
+    toolResult: (res) =>
+      grow((t) => ({
+        ...t,
+        tools: (t.tools ?? []).map((u) =>
+          u.id === res.id ? { ...u, result: res.text, resultError: res.is_error } : u,
+        ),
+      })),
     done: (cits) => grow((t) => ({ ...t, sources: citationsToSources(cits), pending: false })),
     error: (m) =>
       grow((t) => ({ ...t, text: `${t.text}\n\n_error: ${m}_`, pending: false, errored: true })),

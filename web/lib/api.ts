@@ -132,10 +132,24 @@ export function citationsToSources(
     .map((c) => ({ source: c.source, path: c.original_path, modality: c.modality }));
 }
 
+export interface ToolUse {
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+}
+
+export interface ToolResult {
+  id: string; // matches the ToolUse.id this is a result for
+  text: string;
+  is_error: boolean;
+}
+
 export interface StreamHandlers {
   query?: (q: string) => void;
   token: (t: string) => void;
   thinking: (t: string) => void;
+  toolUse?: (use: ToolUse) => void;
+  toolResult?: (result: ToolResult) => void;
   done: (citations: Citation[], searchQuery?: string) => void;
   error?: (msg: string) => void;
   gone?: () => void; // a resumed job expired or the server restarted
@@ -160,6 +174,8 @@ async function readSse(res: Response, on: StreamHandlers): Promise<void> {
       if (ev.type === "text") on.token(ev.text);
       else if (ev.type === "thinking") on.thinking(ev.text);
       else if (ev.type === "query") on.query?.(ev.text);
+      else if (ev.type === "tool_use") on.toolUse?.({ id: ev.id, name: ev.name, input: ev.input ?? {} });
+      else if (ev.type === "tool_result") on.toolResult?.({ id: ev.id, text: ev.text ?? "", is_error: !!ev.is_error });
       else if (ev.type === "done") on.done(ev.citations ?? [], ev.search_query);
       else if (ev.type === "error") on.error?.(ev.text);
       else if (ev.type === "gone") on.gone?.();

@@ -1,6 +1,6 @@
 "use client";
 
-import { Brain, ChevronDown, Paperclip, RotateCw, User } from "lucide-react";
+import { Brain, ChevronDown, Paperclip, RotateCw, User, Wrench } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 
@@ -14,6 +14,13 @@ export interface Source {
   path: string | null;
   modality: string;
 }
+export interface ToolEvent {
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+  result?: string; // filled by the corresponding tool_result event
+  resultError?: boolean;
+}
 export interface Turn {
   role: "user" | "assistant";
   text: string;
@@ -24,6 +31,7 @@ export interface Turn {
   pending?: boolean; // answer still generating server-side; resumed by jobId on reload
   jobId?: string;
   errored?: boolean; // generation hit an error or was stopped, so a Continue button is shown
+  tools?: ToolEvent[];
 }
 
 export function ChatMessages({
@@ -70,6 +78,7 @@ export function ChatMessages({
                   <p className="whitespace-pre-wrap text-sm leading-relaxed text-fg">{t.text}</p>
                 ))}
               {t.thinking && <ThinkingBlock text={t.thinking} live={!t.text} />}
+              {t.tools?.map((u) => <ToolCard key={u.id || u.name} use={u} />)}
               {t.sources && t.sources.length > 0 && (
                 <div className="mt-1 flex flex-wrap gap-1.5">
                   {t.sources.map((s) =>
@@ -176,6 +185,49 @@ function StreamingText({ text, live }: { text: string; live: boolean }) {
     );
   }
   return <MarkdownMessage text={text} />;
+}
+
+// One tool the model just used (agent mode): name, preview of the arguments, and the result.
+function ToolCard({ use }: { use: ToolEvent }) {
+  const [open, setOpen] = useState(false);
+  const pending = use.result === undefined;
+  const summary = inputSummary(use.input);
+  return (
+    <div className="mt-1 rounded-md border border-line bg-panel/40 text-xs">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left transition-colors hover:bg-panel"
+      >
+        <Wrench size={11} className={cn(pending ? "animate-pulse text-accent" : "text-muted")} />
+        <span className="font-mono text-[11px] text-muted">{use.name}</span>
+        <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-faint">{summary}</span>
+        {use.resultError && <span className="font-mono text-[10px] text-danger">error</span>}
+        <ChevronDown size={11} className={cn("transition-transform text-faint", open && "rotate-180")} />
+      </button>
+      {open && (
+        <div className="border-t border-line px-2.5 py-2 font-mono text-[11px] text-muted">
+          <pre className="whitespace-pre-wrap break-words text-faint">{JSON.stringify(use.input, null, 2)}</pre>
+          {use.result !== undefined && (
+            <pre
+              className={cn(
+                "mt-2 max-h-72 overflow-y-auto whitespace-pre-wrap border-t border-line pt-2",
+                use.resultError ? "text-danger" : "text-fg",
+              )}
+            >
+              {use.result || "(no output)"}
+            </pre>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function inputSummary(input: Record<string, unknown>): string {
+  // Show a friendly inline summary based on the tool's most informative field.
+  const c = input.command ?? input.file_path ?? input.pattern ?? input.path ?? input.url;
+  if (typeof c === "string") return c.length > 60 ? c.slice(0, 57) + "…" : c;
+  return Object.keys(input).join(", ") || "(no input)";
 }
 
 function ThinkingBlock({ text, live }: { text: string; live: boolean }) {

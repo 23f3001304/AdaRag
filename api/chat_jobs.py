@@ -28,6 +28,7 @@ class ChatJob:
     text: str = ""
     thinking: str = ""
     citations: list = field(default_factory=list)
+    tools: list = field(default_factory=list)  # ordered tool_use / tool_result events (agent mode)
     status: str = "running"  # running | done | error
     error: str = ""
     task: asyncio.Task | None = None
@@ -43,6 +44,8 @@ class ChatJob:
                     self.text += ev.get("text", "")
                 elif kind == "thinking":
                     self.thinking += ev.get("text", "")
+                elif kind in ("tool_use", "tool_result"):
+                    self.tools.append(ev)
                 elif kind == "done":
                     self.citations = ev.get("citations", [])
                 elif kind == "error":
@@ -57,7 +60,7 @@ class ChatJob:
 
     async def observe(self) -> AsyncIterator[dict]:
         """Events for a (re)connecting client: replay the buffer, then stream new output to done."""
-        sent_text = sent_thinking = 0
+        sent_text = sent_thinking = sent_tools = 0
         sent_query = False
         while True:
             if self.query and not sent_query:
@@ -66,6 +69,9 @@ class ChatJob:
             if len(self.thinking) > sent_thinking:
                 yield {"type": "thinking", "text": self.thinking[sent_thinking:]}
                 sent_thinking = len(self.thinking)
+            while sent_tools < len(self.tools):
+                yield self.tools[sent_tools]
+                sent_tools += 1
             if len(self.text) > sent_text:
                 yield {"type": "text", "text": self.text[sent_text:]}
                 sent_text = len(self.text)
@@ -132,6 +138,11 @@ class ChatJobs:
                     "citations_json": json.dumps(job.citations),
                     "error": job.error,
                 }
+                # Tool events ride alongside citations in the same JSON column so a restart
+                # replays them in order. Older rows without this key fall back to [].
+                payload["citations_json"] = json.dumps(
+                    {"citations": job.citations, "tools": job.tools}
+                )
                 if row is None:
                     session.add(ChatJobRow(message_id=message_id, **payload))
                 else:
@@ -159,11 +170,19 @@ class ChatJobs:
         interrupted = row.status == "running"
         status = "error" if interrupted else row.status
         error = "answer was interrupted by a server restart" if interrupted else row.error
+        # citations_json was repurposed to hold both citations and tools (slice 2C). Bare list
+        # for older rows; new rows store a dict.
+        parsed = json.loads(row.citations_json or "[]")
+        citations, tools = (parsed, []) if isinstance(parsed, list) else (
+            parsed.get("citations") or [],
+            parsed.get("tools") or [],
+        )
         return ChatJob(
             query=row.query,
             text=row.text,
             thinking=row.thinking,
-            citations=json.loads(row.citations_json or "[]"),
+            citations=citations,
+            tools=tools,
             status=status,
             error=error,
         )
