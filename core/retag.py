@@ -1,8 +1,9 @@
-"""Weave a chosen entity name into a document's chunks so retrieval links the file to that person.
+"""Fold a clarification answer back into a document's chunks so retrieval can use it.
 
-Run when a user answers an ingest clarification ("this photo is John"): the name is prepended to
-each chunk's situating context (which is embedded and reranked) and added to its entities (the
-metadata filter), then the chunk is re-embedded. Two people's photos become distinguishable.
+When a user answers an ingest question ("brand? Scott", "who won? Pogacar"), the answer is appended
+to every chunk's situating context (embedded + reranked) and, when it is a short term rather than a
+sentence, added to the chunk's entities (the metadata filter). Several answers accumulate, so a
+photo becomes findable by the rider, the brand, and the event, not just its generic caption.
 """
 
 from __future__ import annotations
@@ -17,19 +18,20 @@ def _embed_text(context: str, text: str, terms: str) -> str:
 
 
 async def retag_document(
-    index: QdrantIndex, embedder: EmbeddingProvider, doc_id: str, entity: str
+    index: QdrantIndex, embedder: EmbeddingProvider, doc_id: str, fact: str
 ) -> int:
-    """Tag every chunk of `doc_id` with `entity` (payload + re-embed); returns chunks updated."""
+    """Append `fact` to each chunk of `doc_id` (context + entities), re-embed; returns count."""
     chunks = await index.fetch_doc(doc_id)
-    if not chunks or not entity.strip():
+    fact = fact.strip()
+    if not chunks or not fact:
         return 0
-    prefix = f"This is {entity.strip()}."
+    is_term = len(fact.split()) <= 4  # a name/brand also joins entities; a sentence is context only
     ids, payloads, texts = [], [], []
     for cid, payload in chunks:
         entities = list(payload.get("entities") or [])
-        if entity not in entities:
-            entities.append(entity)
-        context = f"{prefix} {payload.get('context', '')}".strip()
+        if is_term and fact not in entities:
+            entities.append(fact)
+        context = f"{payload.get('context', '')} {fact}".strip()
         ids.append(cid)
         payloads.append({**payload, "context": context, "entities": entities})
         texts.append(_embed_text(context, payload.get("text", ""), " ".join(entities)))

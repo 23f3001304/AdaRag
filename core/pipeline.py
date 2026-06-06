@@ -110,25 +110,25 @@ class IngestService:
                 for cid, c in zip(ids, chunks, strict=True)
             )
             await session.commit()
-        await self._flag_ambiguity(doc_id, source, text, modality)
         return {"document_id": doc_id, "chunks": len(chunks), "source": source}
 
-    async def _flag_ambiguity(self, doc_id: str, source: str, text: str, modality: str) -> None:
-        """If a file's subject isn't identifiable, file a clarification (never blocks ingest)."""
+    async def flag_ambiguity(self, doc_id: str, source: str, text: str, modality: str) -> None:
+        """Ask the model what's unclear about a file and file a clarification per question.
+
+        Run as a background task after ingest so the upload returns promptly (never blocks).
+        """
         if self._detector_factory is None or self._clarifications is None:
             return
         detector = self._detector_factory()
         try:
-            amb = await detector.detect(text, modality)
-            if amb is None:
-                return
             entities = await self._index.distinct_entities()
-            names = await detector.pick_candidates(amb.question, entities)
+            questions = await detector.analyze(text, modality, entities)
         except Exception:
             return  # detection must never break an ingest
-        await self._clarifications.create(
-            self._bucket, doc_id, source, modality, amb.subject, amb.question, names
-        )
+        for q in questions:
+            await self._clarifications.create(
+                self._bucket, doc_id, source, modality, "", q.question, q.candidates
+            )
 
     async def _contexts(self, chunks: list[Chunk], document: str) -> list[str]:
         """One situating context per chunk, enriched concurrently (empty when off or on failure)."""

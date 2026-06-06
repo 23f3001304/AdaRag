@@ -29,7 +29,7 @@ interface IngestState {
   doc: IngestDoc | null;
   stage: Stage;
   note: string;
-  ingest: (file: File, bucket: string) => void;
+  ingest: (file: File, bucket: string, context?: string) => void;
   playSample: (d: IngestDoc) => void;
 }
 
@@ -108,8 +108,14 @@ export function IngestProvider({ children }: { children: React.ReactNode }) {
     if (!hold) timers.current.push(window.setTimeout(() => setStage("done"), at));
   }, []);
 
+  const finish = (chunks: number) => {
+    setDoc((d) => (d ? { ...d, chunks } : d));
+    setStage("done");
+    window.dispatchEvent(new Event("adarag:ingested")); // nudge the clarification poll
+  };
+
   const ingest = useCallback(
-    async (file: File, bucket: string) => {
+    async (file: File, bucket: string, context = "") => {
       bucketRef.current = bucket;
       const modality = inferModality(file.name);
       animate(
@@ -122,12 +128,19 @@ export function IngestProvider({ children }: { children: React.ReactNode }) {
         true, // hold at "index" until the real ingest resolves
       );
       try {
-        const res = await api.ingest(file, bucket);
-        setDoc((d) => (d ? { ...d, chunks: res.chunks, source: res.source } : d));
-        setStage("done");
+        finish((await api.ingest(file, bucket, context)).chunks);
       } catch {
-        setNote("ingest failed - is the CLI bridge running?");
-        setStage("error");
+        // A slow image can outrun the proxy while the server finishes. If the file actually
+        // landed, show done instead of a misleading error.
+        const landed = await api
+          .listDocuments(bucket)
+          .then((r) => r.documents.find((d) => d.source === file.name))
+          .catch(() => undefined);
+        if (landed) finish(landed.chunks);
+        else {
+          setNote("ingest failed - is the CLI bridge running?");
+          setStage("error");
+        }
       }
     },
     [animate],
