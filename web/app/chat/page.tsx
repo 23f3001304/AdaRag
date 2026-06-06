@@ -190,6 +190,22 @@ export default function ChatPage() {
     if (id === activeId) select(safe[0].id);
   };
 
+  const continueTurn = (turnIndex: number) => {
+    if (!active || busy) return;
+    // Find the user message that produced this errored answer, drop the errored turn, and re-send.
+    let user: Turn | undefined;
+    for (let i = turnIndex - 1; i >= 0; i--) {
+      if (active.turns[i].role === "user") {
+        user = active.turns[i];
+        break;
+      }
+    }
+    if (!user) return;
+    const trimmed = active.turns.slice(0, turnIndex);
+    persist(chats.map((c) => (c.id === active.id ? { ...c, turns: trimmed } : c)));
+    void send(user.text, null);
+  };
+
   const send = async (text: string, file: File | null) => {
     if ((!text && !file) || busy || !active) return;
     if (creating && text) return createSkill(text);
@@ -250,7 +266,7 @@ export default function ChatPage() {
           </span>
         </div>
         <div className="flex-1 space-y-5 overflow-y-auto p-6">
-          <ChatMessages turns={active?.turns ?? []} busy={busy} bucket={bucket} onPreview={setPreview} />
+          <ChatMessages turns={active?.turns ?? []} busy={busy} bucket={bucket} onPreview={setPreview} onContinue={continueTurn} />
           <div ref={endRef} />
         </div>
         <ChatComposer

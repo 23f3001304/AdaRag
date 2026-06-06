@@ -1,6 +1,6 @@
 "use client";
 
-import { Brain, ChevronDown, Paperclip, User } from "lucide-react";
+import { Brain, ChevronDown, Paperclip, RotateCw, User } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 
@@ -23,6 +23,7 @@ export interface Turn {
   thinking?: string;
   pending?: boolean; // answer still generating server-side; resumed by jobId on reload
   jobId?: string;
+  errored?: boolean; // generation hit an error or was stopped, so a Continue button is shown
 }
 
 export function ChatMessages({
@@ -30,11 +31,13 @@ export function ChatMessages({
   busy,
   bucket,
   onPreview,
+  onContinue,
 }: {
   turns: Turn[];
   busy: boolean;
   bucket: string;
   onPreview: (r: Resource) => void;
+  onContinue?: (turnIndex: number) => void;
 }) {
   return (
     <>
@@ -89,6 +92,15 @@ export function ChatMessages({
                     ),
                   )}
                 </div>
+              )}
+              {t.errored && !busy && onContinue && (
+                <button
+                  onClick={() => onContinue(i)}
+                  className="mt-1.5 flex w-fit items-center gap-1.5 rounded-md border border-accent/40 bg-accent/10 px-2.5 py-1 text-xs text-accent transition-colors hover:bg-accent/15"
+                >
+                  <RotateCw size={11} />
+                  Continue
+                </button>
               )}
             </div>
           </motion.div>

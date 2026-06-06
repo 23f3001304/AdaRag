@@ -69,8 +69,15 @@ export async function driveChat(opts: DriveOpts): Promise<void> {
     token: (tok) => grow((t) => ({ ...t, text: t.text + tok })),
     thinking: (th) => grow((t) => ({ ...t, thinking: (t.thinking ?? "") + th })),
     done: (cits) => grow((t) => ({ ...t, sources: citationsToSources(cits), pending: false })),
-    error: (m) => grow((t) => ({ ...t, text: `${t.text}\n\n_error: ${m}_`, pending: false })),
-    gone: () => grow((t) => ({ ...t, text: t.text || "_(answer was interrupted - ask again)_", pending: false })),
+    error: (m) =>
+      grow((t) => ({ ...t, text: `${t.text}\n\n_error: ${m}_`, pending: false, errored: true })),
+    gone: () =>
+      grow((t) => ({
+        ...t,
+        text: t.text || "_(answer was interrupted - ask again)_",
+        pending: false,
+        errored: true,
+      })),
   };
   try {
     if (opts.fresh) await chatStream({ ...opts.fresh, message_id: opts.messageId }, opts.signal, handlers);
@@ -81,6 +88,7 @@ export async function driveChat(opts: DriveOpts): Promise<void> {
       ...t,
       text: aborted ? `${t.text} _(stopped)_` : t.text || "request failed - is the CLI bridge running?",
       pending: false,
+      errored: true,
     }));
   } finally {
     opts.onSettled();
