@@ -5,6 +5,7 @@ import { AppShell } from "@/components/app-shell";
 import { BucketProvider } from "@/components/bucket-context";
 import { ClarificationProvider } from "@/components/clarification-context";
 import { IngestProvider } from "@/components/ingest-context";
+import { NotificationProvider } from "@/components/notification-context";
 
 const display = Bricolage_Grotesque({
   variable: "--font-bricolage",
@@ -36,13 +37,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${display.variable} ${sans.variable} ${mono.variable}`}>
       <body className="min-h-screen antialiased">
-        <BucketProvider>
-          <ClarificationProvider>
-            <IngestProvider>
-              <AppShell>{children}</AppShell>
-            </IngestProvider>
-          </ClarificationProvider>
-        </BucketProvider>
+        <NotificationProvider>
+          <BucketProvider>
+            <ClarificationProvider>
+              <IngestProvider>
+                <AppShell>{children}</AppShell>
+              </IngestProvider>
+            </ClarificationProvider>
+          </BucketProvider>
+        </NotificationProvider>
       </body>
     </html>
   );

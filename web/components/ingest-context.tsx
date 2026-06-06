@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 
+import { useNotify } from "@/components/notification-context";
 import { api } from "@/lib/api";
 
 const KEY = "adarag.ingest";
@@ -44,6 +45,7 @@ export function useIngest(): IngestState {
 // Holds ingest progress at the app level so it survives tab switches, and only marks "done" when
 // the real /ingest call resolves (the stage animation holds at "index" until then).
 export function IngestProvider({ children }: { children: React.ReactNode }) {
+  const { notify } = useNotify();
   const [doc, setDoc] = useState<IngestDoc | null>(null);
   const [stage, setStage] = useState<Stage>("idle");
   const [note, setNote] = useState("");
@@ -129,6 +131,7 @@ export function IngestProvider({ children }: { children: React.ReactNode }) {
       );
       try {
         finish((await api.ingest(file, bucket, context)).chunks);
+        notify({ kind: "success", title: "Ingested", body: file.name });
       } catch {
         // A slow image can outrun the proxy while the server finishes. If the file actually
         // landed, show done instead of a misleading error.
@@ -136,14 +139,17 @@ export function IngestProvider({ children }: { children: React.ReactNode }) {
           .listDocuments(bucket)
           .then((r) => r.documents.find((d) => d.source === file.name))
           .catch(() => undefined);
-        if (landed) finish(landed.chunks);
-        else {
+        if (landed) {
+          finish(landed.chunks);
+          notify({ kind: "success", title: "Ingested", body: file.name });
+        } else {
           setNote("ingest failed - is the CLI bridge running?");
           setStage("error");
+          notify({ kind: "error", title: "Ingest failed", body: file.name });
         }
       }
     },
-    [animate],
+    [animate, notify],
   );
 
   const playSample = useCallback((d: IngestDoc) => animate(d, false), [animate]);

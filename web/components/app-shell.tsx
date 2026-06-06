@@ -20,7 +20,7 @@ import { type ComponentType, useEffect, useState } from "react";
 import { BridgeControl } from "@/components/bridge-control";
 import { BucketSwitcher } from "@/components/bucket-switcher";
 import { useClarifications } from "@/components/clarification-context";
-import { ClarificationToast } from "@/components/clarification-toast";
+import { NotificationStack } from "@/components/notification-stack";
 import { Logo } from "@/components/logo";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
@@ -189,7 +189,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </header>
         <main className="flex-1 overflow-y-auto px-7 py-7">{children}</main>
       </div>
-      <ClarificationToast />
+      <NotificationStack />
     </div>
   );
 }

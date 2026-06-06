@@ -3,6 +3,7 @@
 import { Loader2, Save } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { useNotify } from "@/components/notification-context";
 import { Button, Panel } from "@/components/ui";
 import { type ModeOption, type ProviderConfig, api } from "@/lib/api";
 
@@ -26,6 +27,7 @@ const input =
   "w-full rounded-md border border-line bg-bg px-2.5 py-2 text-sm text-fg outline-none placeholder:text-faint focus:border-line-2";
 
 export default function SettingsPage() {
+  const { notify } = useNotify();
   const [cfg, setCfg] = useState<ProviderConfig | null>(null);
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [keys, setKeys] = useState<Record<string, string>>({});
@@ -64,6 +66,7 @@ export default function SettingsPage() {
         }
         setKeys({});
         setResult({ ok: true, msg: "Saved and reloaded the bridge." });
+        notify({ kind: "success", title: "Settings saved", body: "providers reloaded" });
       } else {
         setResult({ ok: false, msg: r.error ?? "Save failed." });
       }
