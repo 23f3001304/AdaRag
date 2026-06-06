@@ -67,10 +67,14 @@ export function ClarificationProvider({ children }: { children: React.ReactNode 
     };
   }, [refresh]);
 
-  const answer = useCallback(async (id: string, entity: string) => {
-    await api.answerClarification(id, entity);
-    setItems((xs) => xs.filter((x) => x.id !== id));
-  }, []);
+  const answer = useCallback(
+    async (id: string, entity: string) => {
+      await api.answerClarification(id, entity);
+      setItems((xs) => xs.filter((x) => x.id !== id));
+      notify({ kind: "success", title: "Tagged", body: entity });
+    },
+    [notify],
+  );
 
   const dismiss = useCallback(async (id: string) => {
     await api.dismissClarification(id);

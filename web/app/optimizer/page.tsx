@@ -13,6 +13,7 @@ import {
 } from "recharts";
 
 import { useBucket } from "@/components/bucket-context";
+import { useNotify } from "@/components/notification-context";
 import { Button, Panel, Stat } from "@/components/ui";
 import { type StudyState, type TrialPoint, api } from "@/lib/api";
 
@@ -29,19 +30,25 @@ const RUNNING = new Set(["starting", "building_queries", "running"]);
 
 export default function OptimizerPage() {
   const { bucket } = useBucket();
+  const { notify } = useNotify();
   const [state, setState] = useState<StudyState | null>(null);
   const [starting, setStarting] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastStatus = useRef("");
 
   const poll = useCallback(() => {
     api
       .optimizeStatus()
       .then((s) => {
         setState(s);
+        if (s.status === "done" && RUNNING.has(lastStatus.current)) {
+          notify({ kind: "success", title: "Optimizer finished", body: s.headline ?? "study complete" });
+        }
+        lastStatus.current = s.status;
         if (RUNNING.has(s.status)) timer.current = setTimeout(poll, 1500);
       })
       .catch(() => {});
-  }, []);
+  }, [notify]);
 
   useEffect(() => {
     poll(); // pick up a study already in progress

@@ -6,9 +6,10 @@ import { useEffect, useRef, useState } from "react";
 import { useBucket } from "@/components/bucket-context";
 import { ChatComposer } from "@/components/chat-composer";
 import { ChatList } from "@/components/chat-list";
-import { ChatMessages, type Source, type Turn } from "@/components/chat-messages";
+import { ChatMessages, type Turn } from "@/components/chat-messages";
 import { useIngest } from "@/components/ingest-context";
 import { ModePicker } from "@/components/mode-picker";
+import { useNotify } from "@/components/notification-context";
 import { type Resource, ResourceModal } from "@/components/resource-modal";
 import { type ModeOption, api, chatStream, citationsToSources } from "@/lib/api";
 import { loadSkills, saveSkills, type Skill } from "@/lib/skills";
@@ -32,6 +33,7 @@ const fresh = (): Chat => ({
 export default function ChatPage() {
   const { bucket } = useBucket();
   const { ingest: ingestFile } = useIngest();
+  const { notify } = useNotify();
   const [chats, setChats] = useState<Chat[]>([]);
   const [activeId, setActiveId] = useState("");
   const [busy, setBusy] = useState(false);
@@ -128,6 +130,7 @@ export default function ChatPage() {
       saveSkills(next);
       setSkills(next);
       setActiveSkill(skill);
+      notify({ kind: "success", title: "Skill created", body: d.name });
       const slug = d.name.toLowerCase().replace(/\s+/g, "-");
       pushAssistant(base, {
         role: "assistant",
