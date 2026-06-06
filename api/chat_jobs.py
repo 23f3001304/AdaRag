@@ -1,15 +1,20 @@
-"""In-memory chat answer jobs so a refresh or a closed tab never loses an in-flight answer.
+"""Chat answer jobs so a refresh, closed tab, or server restart never loses an in-flight answer.
 
 Generation runs as a background task that keeps filling the job regardless of any connection; an
 SSE client (the original request or a reconnecting tab) just *observes* the job - replaying what is
-buffered, then streaming the rest until done. Stop is an explicit signal that cancels the task.
+buffered, then streaming the rest until done. On completion the buffer is saved to Postgres so a
+restart can still serve `/chat/stream/{message_id}` by hydrating a job from the row.
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
+
+from core.db import Database
+from core.models import ChatJobRow
 
 
 @dataclass
@@ -70,24 +75,78 @@ class ChatJob:
 
 
 class ChatJobs:
-    """Registry of in-flight + recently finished jobs, keyed by a client-supplied message id."""
+    """Registry of in-flight + recently finished jobs, keyed by a client-supplied message id.
 
-    def __init__(self, keep: int = 50) -> None:
+    A completed job is also persisted to Postgres so a server restart can still replay it via
+    `get()` (the in-memory map is empty on boot, but the row hydrates back into a finished job).
+    """
+
+    def __init__(self, db: Database, keep: int = 50) -> None:
+        self._db = db
         self._jobs: dict[str, ChatJob] = {}
         self._order: list[str] = []
         self._keep = keep
 
     def start(self, message_id: str, events: AsyncIterator[dict]) -> ChatJob:
         job = ChatJob()
-        job.task = asyncio.create_task(job.run(events))
+        job.task = asyncio.create_task(self._run_and_persist(message_id, job, events))
         self._jobs[message_id] = job
         self._order.append(message_id)
         while len(self._order) > self._keep:
             self._jobs.pop(self._order.pop(0), None)
         return job
 
-    def get(self, message_id: str) -> ChatJob | None:
-        return self._jobs.get(message_id)
+    async def _run_and_persist(
+        self, message_id: str, job: ChatJob, events: AsyncIterator[dict]
+    ) -> None:
+        """Drive the job, then save its final buffer so a restart can still serve it."""
+        try:
+            await job.run(events)
+        finally:
+            await self._save(message_id, job)
+
+    async def _save(self, message_id: str, job: ChatJob) -> None:
+        """Upsert the completed job into Postgres (best effort - a save failure must not throw)."""
+        try:
+            async with self._db.session() as session:
+                row = await session.get(ChatJobRow, message_id)
+                payload = {
+                    "status": job.status,
+                    "query": job.query,
+                    "text": job.text,
+                    "thinking": job.thinking,
+                    "citations_json": json.dumps(job.citations),
+                    "error": job.error,
+                }
+                if row is None:
+                    session.add(ChatJobRow(message_id=message_id, **payload))
+                else:
+                    for k, v in payload.items():
+                        setattr(row, k, v)
+                await session.commit()
+        except Exception:  # noqa: BLE001 - persistence is a backstop, not the critical path
+            return
+
+    async def get(self, message_id: str) -> ChatJob | None:
+        """Return the live job if known; otherwise hydrate one from a persisted row."""
+        job = self._jobs.get(message_id)
+        if job is not None:
+            return job
+        try:
+            async with self._db.session() as session:
+                row = await session.get(ChatJobRow, message_id)
+        except Exception:  # noqa: BLE001
+            return None
+        if row is None:
+            return None
+        return ChatJob(
+            query=row.query,
+            text=row.text,
+            thinking=row.thinking,
+            citations=json.loads(row.citations_json or "[]"),
+            status=row.status,
+            error=row.error,
+        )
 
     def stop(self, message_id: str) -> bool:
         job = self._jobs.get(message_id)

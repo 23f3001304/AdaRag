@@ -47,6 +47,26 @@ class EvalQuestion(Base):
     is_gold: Mapped[bool] = mapped_column(default=False)  # hand-labeled vs generated
 
 
+class ChatJobRow(Base):
+    """Snapshot of a completed chat answer so a server restart can't erase it.
+
+    The frontend persists the message_id when the turn is created. After generation finishes the
+    server saves the buffered text/thinking/citations under that id, so a reload-after-restart can
+    resume - the resume endpoint loads from here when the in-memory ChatJobs no longer has it.
+    """
+
+    __tablename__ = "chat_jobs"
+
+    message_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    status: Mapped[str] = mapped_column(String(16))  # done | error
+    query: Mapped[str] = mapped_column(Text, default="")
+    text: Mapped[str] = mapped_column(Text, default="")
+    thinking: Mapped[str] = mapped_column(Text, default="")
+    citations_json: Mapped[str] = mapped_column(Text, default="[]")
+    error: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
 class Clarification(Base):
     """A file whose subject the ingest detector couldn't pin to a name, pending a user's answer.
 

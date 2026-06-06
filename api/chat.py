@@ -77,7 +77,7 @@ async def chat_stream(request: Request, body: ChatRequest) -> StreamingResponse:
 @router.get("/chat/stream/{message_id}")
 async def resume_stream(request: Request, message_id: str) -> StreamingResponse:
     """Reconnect a tab to an in-flight or just-finished answer (replays, then streams the rest)."""
-    job = request.app.state.chat_jobs.get(message_id)
+    job = await request.app.state.chat_jobs.get(message_id)
     if job is None:
 
         async def gone() -> AsyncIterator[dict]:
