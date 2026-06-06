@@ -48,6 +48,20 @@ def answer_prompt(scope: str) -> str:
     return _ANSWER_PROMPTS.get(scope, _STRICT)
 
 
+def attach_marker(path: str | None) -> str:
+    """Return `\\n\\n@<path>` when the path exists, else "" - LLM CLIs attach the image natively."""
+    from pathlib import Path
+
+    if not path:
+        return ""
+    try:
+        if Path(path).exists():
+            return f"\n\n@{path}"
+    except OSError:
+        pass
+    return ""
+
+
 def media_attachment_block(hits) -> str:
     """Build `@<path>` lines for image/video citations whose original is on disk, or ''.
 

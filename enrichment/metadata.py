@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 
 from core.interfaces import LLMProvider
 from core.json_extract import extract_json
+from core.prompts import attach_marker
 
 _PROMPT = """Extract search metadata from the passage. Reply with JSON only — three string arrays:
 {{"entities": [...], "dates": [...], "keyphrases": [...]}}.
@@ -45,8 +46,9 @@ class MetadataEnricher:
     def __init__(self, llm: LLMProvider) -> None:
         self._llm = llm
 
-    async def extract(self, text: str) -> ChunkMetadata:
-        data = extract_json(await self._llm.generate(_PROMPT.format(text=text)))
+    async def extract(self, text: str, attach: str | None = None) -> ChunkMetadata:
+        prompt = _PROMPT.format(text=text) + attach_marker(attach)
+        data = extract_json(await self._llm.generate(prompt))
         return ChunkMetadata(
             entities=_str_list(data.get("entities")),
             dates=_str_list(data.get("dates")),

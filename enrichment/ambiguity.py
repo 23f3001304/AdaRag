@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 
 from core.interfaces import LLMProvider
 from core.json_extract import extract_json
+from core.prompts import attach_marker
 
 _PROMPT = """A file was added to a knowledge base. The Content below already describes what is
 visible / present. Your job: list questions whose answers are NOT in the Content but would help
@@ -89,11 +90,13 @@ class AmbiguityDetector:
     def __init__(self, llm: LLMProvider) -> None:
         self._llm = llm
 
-    async def analyze(self, text: str, modality: str, entities: list[str]) -> list[Question]:
+    async def analyze(
+        self, text: str, modality: str, entities: list[str], attach: str | None = None
+    ) -> list[Question]:
         """Questions to put to the user (empty when the file already states what's needed)."""
         prompt = _PROMPT.format(
             modality=modality, text=text[:2000], entities=", ".join(entities) or "(none yet)"
-        )
+        ) + attach_marker(attach)
         try:
             data = extract_json(await self._llm.generate(prompt))
         except Exception:

@@ -80,8 +80,9 @@ class IngestService:
         chunks = self._chunker.chunk(text)
         if not chunks:
             raise ValueError("document produced no chunks (empty after stripping)")
-        contexts = await self._contexts(chunks, text)
-        metas = await self._metadata_for(chunks)
+        attach = original_path if modality in {"image", "video"} else None  # ground in pixels
+        contexts = await self._contexts(chunks, text, attach=attach)
+        metas = await self._metadata_for(chunks, attach=attach)
         to_embed = [
             self._embed_text(ctx, c.text, m.sparse_terms())
             for ctx, c, m in zip(contexts, chunks, metas, strict=True)
@@ -114,17 +115,17 @@ class IngestService:
             await session.commit()
         return {"document_id": doc_id, "chunks": len(chunks), "source": source}
 
-    async def flag_ambiguity(self, doc_id: str, source: str, text: str, modality: str) -> None:
-        """Ask the model what's unclear about a file and file a clarification per question.
-
-        Run as a background task after ingest so the upload returns promptly (never blocks).
-        """
+    async def flag_ambiguity(
+        self, doc_id: str, source: str, text: str, modality: str, original_path: str | None = None
+    ) -> None:
+        """File a clarification per question the model asks (background task, never blocks)."""
         if self._detector_factory is None or self._clarifications is None:
             return
         detector = self._detector_factory()
+        attach = original_path if modality in {"image", "video"} else None
         try:
             entities = await self._index.distinct_entities()
-            questions = await detector.analyze(text, modality, entities)
+            questions = await detector.analyze(text, modality, entities, attach=attach)
         except Exception:
             return  # detection must never break an ingest
         await self._clarifications.drop_pending(self._bucket, source)
@@ -133,7 +134,7 @@ class IngestService:
                 self._bucket, doc_id, source, modality, "", q.question, q.candidates
             )
 
-    async def _contexts(self, chunks: list[Chunk], document: str) -> list[str]:
+    async def _contexts(self, chunks, document: str, attach: str | None = None) -> list[str]:
         """One situating context per chunk, enriched concurrently (empty when off or on failure)."""
         if self._enricher is None:
             return ["" for _ in chunks]
@@ -142,13 +143,13 @@ class IngestService:
         async def one(chunk: Chunk) -> str:
             async with sem:
                 try:
-                    return await self._enricher.context_for(chunk.text, document)
+                    return await self._enricher.context_for(chunk.text, document, attach=attach)
                 except Exception:  # a flaky enrichment call shouldn't abort the whole ingest
                     return ""
 
         return list(await asyncio.gather(*(one(c) for c in chunks)))
 
-    async def _metadata_for(self, chunks: list[Chunk]) -> list[ChunkMetadata]:
+    async def _metadata_for(self, chunks, attach: str | None = None) -> list[ChunkMetadata]:
         """One ChunkMetadata per chunk, extracted concurrently (empty when disabled)."""
         if self._metadata is None:
             return [ChunkMetadata() for _ in chunks]
@@ -157,7 +158,7 @@ class IngestService:
         async def one(chunk: Chunk) -> ChunkMetadata:
             async with sem:
                 try:
-                    return await self._metadata.extract(chunk.text)
+                    return await self._metadata.extract(chunk.text, attach=attach)
                 except Exception:
                     return ChunkMetadata()
 

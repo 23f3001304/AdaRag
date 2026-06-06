@@ -38,7 +38,12 @@ async def ingest(
         ingest_service = state.buckets.services(bucket).ingest
         result = await ingest_service.ingest(name, text, doc.modality, doc.original_path)
         background.add_task(
-            ingest_service.flag_ambiguity, result["document_id"], name, text, doc.modality
+            ingest_service.flag_ambiguity,
+            result["document_id"],
+            name,
+            text,
+            doc.modality,
+            doc.original_path,
         )
         return result
     except Exception:
