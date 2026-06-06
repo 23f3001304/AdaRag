@@ -13,6 +13,7 @@ from core.interfaces import EmbeddingProvider, LLMProvider
 from core.models import Chunk as ChunkRow
 from core.models import Document
 from core.prompts import answer_prompt as _answer_prompt
+from core.prompts import media_attachment_block
 from enrichment.ambiguity import AmbiguityDetector
 from enrichment.contextual import ContextualEnricher
 from enrichment.metadata import ChunkMetadata, MetadataEnricher
@@ -281,6 +282,7 @@ class AnswerService:
         prompt = _answer_prompt(scope).format(context=context, query=query)
         if persona and persona.strip():
             prompt = f"{persona.strip()}\n\n{prompt}"
+        prompt = prompt + media_attachment_block(hits)
         citations = [
             {
                 "n": i + 1,

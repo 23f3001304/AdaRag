@@ -46,3 +46,24 @@ _ANSWER_PROMPTS = {"strict": _STRICT, "medium": _MEDIUM, "lazy": _LAZY}
 def answer_prompt(scope: str) -> str:
     """The prompt template for one of the three scopes, falling back to strict on bad input."""
     return _ANSWER_PROMPTS.get(scope, _STRICT)
+
+
+def media_attachment_block(hits) -> str:
+    """Build `@<path>` lines for image/video citations whose original is on disk, or ''.
+
+    claude-cli and gemini-cli interpret `@<path>` in the prompt as a native image attachment so the
+    model sees the actual pixels, not just our text caption. Other providers ignore the marker.
+    """
+    from pathlib import Path
+
+    lines: list[str] = []
+    for i, h in enumerate(hits):
+        if h.modality in {"image", "video"} and h.original_path:
+            try:
+                if Path(h.original_path).exists():
+                    lines.append(f"[{i + 1}] @{h.original_path}")
+            except OSError:
+                pass
+    if not lines:
+        return ""
+    return "\n\nAttached media for the citations:\n" + "\n".join(lines)
