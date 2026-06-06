@@ -129,25 +129,40 @@ export function IngestProvider({ children }: { children: React.ReactNode }) {
         },
         true, // hold at "index" until the real ingest resolves
       );
-      try {
-        finish((await api.ingest(file, bucket, context)).chunks);
+      // Race the upload POST against a periodic /documents poll. Whichever confirms first wins:
+      // a fast text file lands via the POST response; a slow image (vision captioning + per-chunk
+      // enrichment can take >60s) finishes server-side after the proxy gave up on the POST, and
+      // the poll finds it. Either way the user gets the truth, not a misleading "failed".
+      let settled = false;
+      const succeed = (chunks: number) => {
+        if (settled) return;
+        settled = true;
+        finish(chunks);
         notify({ kind: "success", title: "Ingested", body: file.name });
-      } catch {
-        // A slow image can outrun the proxy while the server finishes. If the file actually
-        // landed, show done instead of a misleading error.
+      };
+      api.ingest(file, bucket, context).then(
+        (r) => succeed(r.chunks),
+        () => {
+          /* swallow: the poller is the source of truth on errors */
+        },
+      );
+      const deadline = Date.now() + 5 * 60 * 1000; // 5 minutes - long enough for any real ingest
+      while (!settled && Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 3000));
+        if (settled) return;
         const landed = await api
           .listDocuments(bucket)
           .then((r) => r.documents.find((d) => d.source === file.name))
           .catch(() => undefined);
         if (landed) {
-          finish(landed.chunks);
-          notify({ kind: "success", title: "Ingested", body: file.name });
-        } else {
-          setNote("ingest failed - is the CLI bridge running?");
-          setStage("error");
-          notify({ kind: "error", title: "Ingest failed", body: file.name });
+          succeed(landed.chunks);
+          return;
         }
       }
+      if (settled) return;
+      setNote("ingest didn't complete in 5 minutes - check the CLI bridge");
+      setStage("error");
+      notify({ kind: "error", title: "Ingest failed", body: file.name });
     },
     [animate, notify],
   );
