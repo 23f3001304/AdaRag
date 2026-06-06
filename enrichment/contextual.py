@@ -14,8 +14,11 @@ Here is a chunk from that document:
 {chunk}
 </chunk>
 
-Write a short (1-2 sentence) context that situates this chunk within the document, to improve \
-search retrieval. Reply with the context only, nothing else."""
+Write a maximally dense context that helps a future search query find this chunk. Capture every
+retrieval-relevant signal: named entities (people, places, products, projects), dates, what the
+chunk shows / argues / describes, its role in the document, and key relations to the rest of the
+document. Cut all filler, preamble, and hedging - every word should earn its place. Length is
+whatever it takes to be complete; do not pad and do not omit. Reply with the context only."""
 
 
 class ContextualEnricher:
