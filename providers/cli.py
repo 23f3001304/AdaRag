@@ -55,13 +55,14 @@ async def _run(argv: list[str], stdin_text: str, timeout: float = DEFAULT_TIMEOU
     return out.decode("utf-8", "replace")
 
 
-async def _stream_lines(argv: list[str], stdin_text: str):
+async def _stream_lines(argv: list[str], stdin_text: str, env: dict | None = None):
     """Run argv and yield its stdout line by line; kills the process if the consumer stops early."""
     proc = await asyncio.create_subprocess_exec(
         *_resolve(argv),
         stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.DEVNULL,
+        env=env,
     )
     try:
         if proc.stdin:
@@ -156,16 +157,36 @@ class ClaudeCodeLLM:
         _record_usage(data)
         return data["result"]
 
-    async def stream(self, prompt: str, *, system: str | None = None, agent: bool = False):
-        """Yield deltas from claude-cli; agent=True opens a safe tool set for agentic work."""
+    async def stream(
+        self,
+        prompt: str,
+        *,
+        system: str | None = None,
+        agent: bool = False,
+        session_id: str = "",
+    ):
+        """Yield deltas from claude-cli; agent=True routes tool use through MCP permission prompts.
+
+        In agent mode each tool call goes through `--permission-prompt-tool` which our stdio MCP
+        server (scripts/permission_mcp.py) handles - the bridge bubbles the request to the user
+        and only releases it back to claude once Approve is clicked. session_id correlates the
+        MCP call back to this exact /stream subscription.
+        """
         text = f"{system}\n\n{prompt}" if system else prompt
         argv = [self._binary, "-p", "--output-format", "stream-json", "--verbose"]
         argv += ["--include-partial-messages"]
         if self.model:
             argv += ["--model", self.model]
+        env = None
         if agent:
-            argv += ["--allowed-tools", "Read Glob Grep Bash Edit Write"]
-        async for raw in _stream_lines(argv, text):
+            argv += [
+                "--mcp-config",
+                ".mcp.json",
+                "--permission-prompt-tool",
+                "mcp__adarag__permission_prompt",
+            ]
+            env = {**os.environ, "ADARAG_SESSION_ID": session_id}
+        async for raw in _stream_lines(argv, text, env=env):
             raw = raw.strip()
             if not raw:
                 continue

@@ -39,6 +39,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from core.config import Settings, get_settings  # noqa: E402
 from providers.registry import build_llm, build_vision  # noqa: E402
+from scripts.permission_state import (  # noqa: E402
+    _queue_for,
+    merge_with_queue,
+    release_session,
+    session_queue,
+)
+from scripts.permission_state import (
+    router as permission_router,
+)
 
 _ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 
@@ -169,6 +178,7 @@ def _write_env(updates: dict[str, str]) -> None:
 
 
 app = FastAPI(title="AdaRag CLI bridge")
+app.include_router(permission_router)
 
 
 @app.get("/health")
@@ -221,25 +231,36 @@ async def generate(body: GenerateIn) -> dict:
 
 @app.post("/stream")
 async def stream(body: GenerateIn) -> StreamingResponse:
-    """Stream a generation as SSE lines: `data: {"type": text|thinking|done|error, "text": ...}`."""
-    llm = _llm_for(body.provider, body.model) if body.provider and body.model else _state.llm
+    """Stream a generation as SSE lines, interleaving permission_required events in agent mode."""
+    import uuid as _uuid
 
+    llm = _llm_for(body.provider, body.model) if body.provider and body.model else _state.llm
     # agent only matters for the claude CLI; other providers ignore the kwarg.
     stream_kwargs: dict = {"system": body.system}
+    perm_session = ""
     if body.agent:
         stream_kwargs["agent"] = True
+        # Tag this stream so the MCP server knows which session a permission request belongs to.
+        perm_session = _uuid.uuid4().hex
+        stream_kwargs["session_id"] = perm_session
+        session_queue(perm_session)  # eager-create the queue before claude-cli is spawned
 
     async def events():
+        queue = _queue_for(perm_session) if perm_session else None
         try:
             if hasattr(llm, "stream"):
-                async for ev in llm.stream(body.prompt, **stream_kwargs):
+                gen = llm.stream(body.prompt, **stream_kwargs)
+                async for ev in merge_with_queue(gen, queue):
                     yield f"data: {json.dumps(ev)}\n\n"
-            else:  # provider without streaming: emit the whole answer at once
+            else:
                 text = await llm.generate(body.prompt, system=body.system)
                 yield f"data: {json.dumps({'type': 'text', 'text': text})}\n\n"
         except Exception as exc:
             msg = str(exc) or f"{type(exc).__name__}"
             yield f"data: {json.dumps({'type': 'error', 'text': msg})}\n\n"
+        finally:
+            if perm_session:
+                release_session(perm_session)
         yield 'data: {"type": "done"}\n\n'
 
     return StreamingResponse(events(), media_type="text/event-stream")

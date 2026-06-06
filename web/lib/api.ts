@@ -91,10 +91,7 @@ function json(body: unknown): RequestInit {
   return { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) };
 }
 
-// URL for a preserved original. The stored path is base64url-encoded and the route is /files/blob
-// (not /files/raw?path=<hash>.pdf): that older shape looks like a tracking beacon, so ad/privacy
-// blockers drop it with an empty 204 - which the browser saves as a 0-byte file. An opaque,
-// extension-free param carries no pattern for those filter lists to match.
+// /files/blob?path=<base64>: opaque shape so URL-pattern ad-blockers don't drop the response.
 function blobUrl(path: string, name?: string, download?: boolean): string {
   const p = btoa(path).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
   const q = [`path=${p}`];
@@ -150,9 +147,10 @@ export interface StreamHandlers {
   thinking: (t: string) => void;
   toolUse?: (use: ToolUse) => void;
   toolResult?: (result: ToolResult) => void;
+  permission?: (req: { id: string; tool_name: string; input: Record<string, unknown> }) => void;
   done: (citations: Citation[], searchQuery?: string) => void;
   error?: (msg: string) => void;
-  gone?: () => void; // a resumed job expired or the server restarted
+  gone?: () => void;
 }
 
 // Parse a chat SSE body, invoking handlers per event. Shared by a fresh stream and a resume.
@@ -176,6 +174,7 @@ async function readSse(res: Response, on: StreamHandlers): Promise<void> {
       else if (ev.type === "query") on.query?.(ev.text);
       else if (ev.type === "tool_use") on.toolUse?.({ id: ev.id, name: ev.name, input: ev.input ?? {} });
       else if (ev.type === "tool_result") on.toolResult?.({ id: ev.id, text: ev.text ?? "", is_error: !!ev.is_error });
+      else if (ev.type === "permission_required") on.permission?.({ id: ev.id, tool_name: ev.tool_name, input: ev.input ?? {} });
       else if (ev.type === "done") on.done(ev.citations ?? [], ev.search_query);
       else if (ev.type === "error") on.error?.(ev.text);
       else if (ev.type === "gone") on.gone?.();
@@ -275,8 +274,8 @@ export const api = {
   route: (message: string) => req<{ intent: "ingest" | "ask" }>("/route", json({ message })),
   routeSkill: (message: string) =>
     req<{ intent: "skill" | "ask" }>("/route/skill", json({ message })),
-  stopChat: (messageId: string) =>
-    req<{ stopped: boolean }>(`/chat/stop/${encodeURIComponent(messageId)}`, { method: "POST" }),
+  stopChat: (id: string) => req<{ stopped: boolean }>(`/chat/stop/${encodeURIComponent(id)}`, { method: "POST" }),
+  decidePermission: (rid: string, allow: boolean) => req<{ ok: boolean }>(`/chat/permission/${encodeURIComponent(rid)}/decide`, json({ allow })),
   draftSkill: (description: string) =>
     req<{ name: string; persona: string; top_k: number }>("/skills/draft", json({ description })),
   listModes: () => req<{ modes: ModeOption[] }>("/models"),

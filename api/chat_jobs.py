@@ -44,7 +44,7 @@ class ChatJob:
                     self.text += ev.get("text", "")
                 elif kind == "thinking":
                     self.thinking += ev.get("text", "")
-                elif kind in ("tool_use", "tool_result"):
+                elif kind in ("tool_use", "tool_result", "permission_required"):
                     self.tools.append(ev)
                 elif kind == "done":
                     self.citations = ev.get("citations", [])

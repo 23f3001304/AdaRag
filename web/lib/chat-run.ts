@@ -8,6 +8,27 @@ import {
   resumeStream,
 } from "@/lib/api";
 
+// Drop the errored turn and re-send the user message that produced it.
+export function continueErrored<C extends { id: string; turns: Turn[] }>(
+  active: C,
+  busy: boolean,
+  turnIndex: number,
+  trimTo: (chatId: string, turns: Turn[]) => void,
+  resend: (text: string) => void,
+): void {
+  if (busy) return;
+  let user: Turn | undefined;
+  for (let i = turnIndex - 1; i >= 0; i--) {
+    if (active.turns[i].role === "user") {
+      user = active.turns[i];
+      break;
+    }
+  }
+  if (!user) return;
+  trimTo(active.id, active.turns.slice(0, turnIndex));
+  resend(user.text);
+}
+
 // Reconnect to every chat whose last assistant turn is still pending - the server kept generating
 // while the page reloaded. Resumed jobs are tracked so we never start two streams for the same id.
 export function resumePending<C extends { id: string; turns: Turn[] }>(
@@ -71,7 +92,22 @@ export async function driveChat(opts: DriveOpts): Promise<void> {
     token: (tok) => grow((t) => ({ ...t, text: t.text + tok })),
     thinking: (th) => grow((t) => ({ ...t, thinking: (t.thinking ?? "") + th })),
     toolUse: (use) =>
-      grow((t) => ({ ...t, tools: [...(t.tools ?? []), { id: use.id, name: use.name, input: use.input }] })),
+      grow((t) => {
+        const tools = t.tools ?? [];
+        // A tool_use after a matching permission_required just confirms the same call - merge.
+        const existing = tools.find((x) => x.id === use.id);
+        return existing
+          ? { ...t, tools: tools.map((x) => (x.id === use.id ? { ...x, name: use.name, input: use.input } : x)) }
+          : { ...t, tools: [...tools, { id: use.id, name: use.name, input: use.input }] };
+      }),
+    permission: (req) =>
+      grow((t) => ({
+        ...t,
+        tools: [
+          ...(t.tools ?? []),
+          { id: req.id, name: req.tool_name, input: req.input, pendingPermission: true },
+        ],
+      })),
     toolResult: (res) =>
       grow((t) => ({
         ...t,

@@ -14,7 +14,7 @@ import { ModePicker } from "@/components/mode-picker";
 import { useNotify } from "@/components/notification-context";
 import { type Resource, ResourceModal } from "@/components/resource-modal";
 import { type ModeOption, api } from "@/lib/api";
-import { driveChat, resumePending } from "@/lib/chat-run";
+import { continueErrored, driveChat, resumePending } from "@/lib/chat-run";
 import { isSkillRequest } from "@/lib/skill-intent";
 import { loadSkills, saveSkills, type Skill } from "@/lib/skills";
 
@@ -199,20 +199,20 @@ export default function ChatPage() {
     if (id === activeId) select(safe[0].id);
   };
 
+  const decide = (id: string, allow: boolean) => {
+    api.decidePermission(id, allow).catch(() => {});
+    if (!active) return;
+    patchTurn(active.id, (t) => ({
+      ...t,
+      tools: t.tools?.map((u) => (u.id === id ? { ...u, decided: allow ? "allow" : "deny" } : u)),
+    }));
+  };
+
   const continueTurn = (turnIndex: number) => {
-    if (!active || busy) return;
-    // Find the user message that produced this errored answer, drop the errored turn, and re-send.
-    let user: Turn | undefined;
-    for (let i = turnIndex - 1; i >= 0; i--) {
-      if (active.turns[i].role === "user") {
-        user = active.turns[i];
-        break;
-      }
-    }
-    if (!user) return;
-    const trimmed = active.turns.slice(0, turnIndex);
-    persist(chats.map((c) => (c.id === active.id ? { ...c, turns: trimmed } : c)));
-    void send(user.text, null);
+    if (!active) return;
+    continueErrored(active, busy, turnIndex,
+      (cid, turns) => persist(chats.map((c) => (c.id === cid ? { ...c, turns } : c))),
+      (text) => void send(text, null));
   };
 
   const send = async (text: string, file: File | null) => {
@@ -279,7 +279,7 @@ export default function ChatPage() {
           </span>
         </div>
         <div className="flex-1 space-y-5 overflow-y-auto p-6">
-          <ChatMessages turns={active?.turns ?? []} busy={busy} bucket={bucket} onPreview={setPreview} onContinue={continueTurn} />
+          <ChatMessages turns={active?.turns ?? []} busy={busy} bucket={bucket} onPreview={setPreview} onContinue={continueTurn} onDecide={decide} />
           <div ref={endRef} />
         </div>
         <ChatComposer

@@ -99,3 +99,24 @@ async def resume_stream(request: Request, message_id: str) -> StreamingResponse:
 async def stop_stream(request: Request, message_id: str) -> dict:
     """Explicitly stop generation - a dropped connection no longer cancels it on its own."""
     return {"stopped": request.app.state.chat_jobs.stop(message_id)}
+
+
+class PermissionDecideBody(BaseModel):
+    allow: bool
+    message: str = ""
+
+
+@router.post("/chat/permission/{rid}/decide")
+async def decide_permission(request: Request, rid: str, body: PermissionDecideBody) -> dict:
+    """Forward a user's approve/deny decision to the bridge so claude-cli's tool call unblocks."""
+    import httpx
+
+    s = request.app.state.settings
+    if s.llm_provider != "cli-bridge":
+        return {"ok": False, "error": "permissions require the cli-bridge deployment"}
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.post(
+            f"{s.cli_bridge_url.rstrip('/')}/permission/{rid}/decide",
+            json={"allow": body.allow, "message": body.message},
+        )
+        return resp.json() if resp.status_code == 200 else {"ok": False, "error": resp.text[:200]}

@@ -20,6 +20,8 @@ export interface ToolEvent {
   input: Record<string, unknown>;
   result?: string; // filled by the corresponding tool_result event
   resultError?: boolean;
+  pendingPermission?: boolean; // an Approve/Deny card before the model is allowed to run it
+  decided?: "allow" | "deny";
 }
 export interface Turn {
   role: "user" | "assistant";
@@ -40,12 +42,14 @@ export function ChatMessages({
   bucket,
   onPreview,
   onContinue,
+  onDecide,
 }: {
   turns: Turn[];
   busy: boolean;
   bucket: string;
   onPreview: (r: Resource) => void;
   onContinue?: (turnIndex: number) => void;
+  onDecide?: (id: string, allow: boolean) => void;
 }) {
   return (
     <>
@@ -78,7 +82,7 @@ export function ChatMessages({
                   <p className="whitespace-pre-wrap text-sm leading-relaxed text-fg">{t.text}</p>
                 ))}
               {t.thinking && <ThinkingBlock text={t.thinking} live={!t.text} />}
-              {t.tools?.map((u) => <ToolCard key={u.id || u.name} use={u} />)}
+              {t.tools?.map((u) => <ToolCard key={u.id || u.name} use={u} onDecide={onDecide} />)}
               {t.sources && t.sources.length > 0 && (
                 <div className="mt-1 flex flex-wrap gap-1.5">
                   {t.sources.map((s) =>
@@ -188,12 +192,24 @@ function StreamingText({ text, live }: { text: string; live: boolean }) {
 }
 
 // One tool the model just used (agent mode): name, preview of the arguments, and the result.
-function ToolCard({ use }: { use: ToolEvent }) {
-  const [open, setOpen] = useState(false);
+function ToolCard({
+  use,
+  onDecide,
+}: {
+  use: ToolEvent;
+  onDecide?: (id: string, allow: boolean) => void;
+}) {
+  const awaiting = use.pendingPermission && !use.decided;
+  const [open, setOpen] = useState(!!awaiting); // expand permission cards by default
   const pending = use.result === undefined;
   const summary = inputSummary(use.input);
   return (
-    <div className="mt-1 rounded-md border border-line bg-panel/40 text-xs">
+    <div
+      className={cn(
+        "mt-1 rounded-md border bg-panel/40 text-xs",
+        awaiting ? "border-accent/50 bg-accent/[0.06]" : "border-line",
+      )}
+    >
       <button
         onClick={() => setOpen((o) => !o)}
         className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left transition-colors hover:bg-panel"
@@ -201,12 +217,30 @@ function ToolCard({ use }: { use: ToolEvent }) {
         <Wrench size={11} className={cn(pending ? "animate-pulse text-accent" : "text-muted")} />
         <span className="font-mono text-[11px] text-muted">{use.name}</span>
         <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-faint">{summary}</span>
+        {awaiting && <span className="font-mono text-[10px] text-accent">needs approval</span>}
+        {use.decided === "deny" && <span className="font-mono text-[10px] text-danger">denied</span>}
         {use.resultError && <span className="font-mono text-[10px] text-danger">error</span>}
         <ChevronDown size={11} className={cn("transition-transform text-faint", open && "rotate-180")} />
       </button>
       {open && (
         <div className="border-t border-line px-2.5 py-2 font-mono text-[11px] text-muted">
           <pre className="whitespace-pre-wrap break-words text-faint">{JSON.stringify(use.input, null, 2)}</pre>
+          {awaiting && onDecide && (
+            <div className="mt-2 flex gap-2 border-t border-line pt-2">
+              <button
+                onClick={() => onDecide(use.id, true)}
+                className="rounded-md bg-accent px-3 py-1 text-xs font-medium text-bg transition-opacity hover:opacity-90"
+              >
+                Approve
+              </button>
+              <button
+                onClick={() => onDecide(use.id, false)}
+                className="rounded-md border border-line px-3 py-1 text-xs text-muted transition-colors hover:border-danger hover:text-danger"
+              >
+                Deny
+              </button>
+            </div>
+          )}
           {use.result !== undefined && (
             <pre
               className={cn(
