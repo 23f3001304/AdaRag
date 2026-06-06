@@ -179,12 +179,10 @@ class ClaudeCodeLLM:
             argv += ["--model", self.model]
         env = None
         if agent:
-            argv += [
-                "--mcp-config",
-                ".mcp.json",
-                "--permission-prompt-tool",
-                "mcp__adarag__permission_prompt",
-            ]
+            # claude-cli 2.1.x has no --permission-prompt-tool; --allowed-tools is the only way to
+            # enable tool use in -p mode. Cards in the UI provide visibility; pre-approval would
+            # need claude-cli to add a plug-in permission gate (it currently doesn't).
+            argv += ["--allowed-tools", "Read Glob Grep Bash Edit Write"]
             env = {**os.environ, "ADARAG_SESSION_ID": session_id}
         async for raw in _stream_lines(argv, text, env=env):
             raw = raw.strip()
