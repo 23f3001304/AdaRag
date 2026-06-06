@@ -9,12 +9,15 @@ restart can still serve `/chat/stream/{message_id}` by hydrating a job from the 
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 
 from core.db import Database
 from core.models import ChatJobRow
+
+_SNAPSHOT_INTERVAL = 0.6  # seconds between mid-stream checkpoints to Postgres
 
 
 @dataclass
@@ -99,11 +102,22 @@ class ChatJobs:
     async def _run_and_persist(
         self, message_id: str, job: ChatJob, events: AsyncIterator[dict]
     ) -> None:
-        """Drive the job, then save its final buffer so a restart can still serve it."""
+        """Drive the job + checkpoint mid-stream so even an api crash leaves the partial answer."""
+        snap = asyncio.create_task(self._snapshot_loop(message_id, job))
         try:
             await job.run(events)
         finally:
+            snap.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await snap
             await self._save(message_id, job)
+
+    async def _snapshot_loop(self, message_id: str, job: ChatJob) -> None:
+        """Save the buffer periodically while the job is still running."""
+        while True:
+            await asyncio.sleep(_SNAPSHOT_INTERVAL)
+            if job.status == "running":
+                await self._save(message_id, job)
 
     async def _save(self, message_id: str, job: ChatJob) -> None:
         """Upsert the completed job into Postgres (best effort - a save failure must not throw)."""
@@ -139,13 +153,19 @@ class ChatJobs:
             return None
         if row is None:
             return None
+        # status="running" in a row hydrated from disk means the api died mid-stream and the final
+        # save never ran. Surface the partial buffer as an interrupted job so the client sees the
+        # tokens that were generated and can decide whether to retry.
+        interrupted = row.status == "running"
+        status = "error" if interrupted else row.status
+        error = "answer was interrupted by a server restart" if interrupted else row.error
         return ChatJob(
             query=row.query,
             text=row.text,
             thinking=row.thinking,
             citations=json.loads(row.citations_json or "[]"),
-            status=row.status,
-            error=row.error,
+            status=status,
+            error=error,
         )
 
     def stop(self, message_id: str) -> bool:
