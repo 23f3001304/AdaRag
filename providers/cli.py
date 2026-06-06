@@ -18,6 +18,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from core.usage import METER
+from providers.cli_stream import parse_claude_event, parse_gemini_event
 
 DEFAULT_TIMEOUT = 120.0
 
@@ -92,49 +93,6 @@ def _record_usage(data: dict) -> None:
     )
 
 
-def _parse_claude_event(ev: dict):
-    """Parse one claude-cli stream-json event into UI deltas.
-
-    Emits text/thinking from content_block_delta events, and tool_use / tool_result events when
-    the model uses a tool (agent mode). For tool_use we read the assembled `assistant` message
-    (it has the full input ready), and for tool_result we read the next user message turn.
-    """
-    msg_type = ev.get("type")
-    if msg_type == "stream_event":
-        event = ev.get("event", {})
-        if event.get("type") == "content_block_delta":
-            delta = event.get("delta", {})
-            if delta.get("type") == "text_delta" and delta.get("text"):
-                yield {"type": "text", "text": delta["text"]}
-            elif delta.get("type") == "thinking_delta" and delta.get("thinking"):
-                yield {"type": "thinking", "text": delta["thinking"]}
-        return
-    # The fully assembled assistant / user messages carry tool_use and tool_result blocks. The
-    # stream_event content_block_start emits an EMPTY input (it streams via input_json_delta);
-    # the assembled message has the complete input, so we use that.
-    if msg_type not in ("assistant", "user"):
-        return
-    content = (ev.get("message") or {}).get("content") or []
-    for block in content:
-        kind = block.get("type")
-        if kind == "tool_use":
-            yield {
-                "type": "tool_use",
-                "id": block.get("id", ""),
-                "name": block.get("name", ""),
-                "input": block.get("input", {}),
-            }
-        elif kind == "tool_result":
-            raw = block.get("content")
-            text = raw if isinstance(raw, str) else (raw[0].get("text", "") if raw else "")
-            yield {
-                "type": "tool_result",
-                "id": block.get("tool_use_id", ""),
-                "text": text,
-                "is_error": bool(block.get("is_error")),
-            }
-
-
 class ClaudeCodeLLM:
     """LLMProvider via the Claude Code CLI (`claude -p`); rides the CLI's own login, no key."""
 
@@ -192,7 +150,7 @@ class ClaudeCodeLLM:
                 ev = json.loads(raw)
             except json.JSONDecodeError:
                 continue
-            for parsed in _parse_claude_event(ev):
+            for parsed in parse_claude_event(ev):
                 yield parsed
 
 
@@ -210,6 +168,37 @@ class GeminiCLILLM:
         if self.model:
             argv += ["-m", self.model]
         return (await _run(argv, text)).strip()
+
+    async def stream(
+        self,
+        prompt: str,
+        *,
+        system: str | None = None,
+        agent: bool = False,
+        session_id: str = "",  # noqa: ARG002 - kept for signature parity with claude-cli
+    ):
+        """Yield text + tool deltas from gemini-cli's --output-format stream-json.
+
+        agent=True passes --yolo so the CLI auto-approves its tool calls (run_shell_command,
+        read_file, edit_file, etc.) - visibility only, same trade-off as claude-cli.
+        """
+        text = f"{system}\n\n{prompt}" if system else prompt
+        argv = [self._binary, "-p", text, "--output-format", "stream-json"]
+        if self.model:
+            argv += ["-m", self.model]
+        if agent:
+            argv += ["--yolo"]
+        # gemini-cli takes the prompt via -p, so its stdin can be empty.
+        async for raw in _stream_lines(argv, ""):
+            raw = raw.strip()
+            if not raw or not raw.startswith("{"):
+                continue
+            try:
+                ev = json.loads(raw)
+            except json.JSONDecodeError:
+                continue
+            for parsed in parse_gemini_event(ev):
+                yield parsed
 
 
 @contextmanager
