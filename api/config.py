@@ -70,4 +70,11 @@ async def put_config(request: Request, body: ConfigUpdate) -> dict:
     s = request.app.state.settings
     if s.llm_provider != "cli-bridge":
         return {"ok": False, "error": "editing config requires the cli-bridge deployment"}
-    return await bridge_put_config(s.cli_bridge_url, data) if data else {"ok": True}
+    resp = await bridge_put_config(s.cli_bridge_url, data) if data else {"ok": True}
+    # Round-trip the api-side ambiguity fields too so the frontend draft stays fully populated.
+    provider, model = request.app.state.buckets.ambiguity.get()
+    cfg = resp.get("config")
+    if isinstance(cfg, dict):
+        cfg["ambiguity_provider"] = provider
+        cfg["ambiguity_model"] = model
+    return resp

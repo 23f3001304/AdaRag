@@ -35,12 +35,17 @@ export default function SettingsPage() {
   const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [modes, setModes] = useState<ModeOption[]>([]);
 
+  // Coalesce every editable field to a string so a missing api-only field (ambiguity_*) in the
+  // bridge config response doesn't flip an input from controlled to uncontrolled.
+  const fillDraft = (c: Partial<Record<(typeof EDITABLE)[number], string>>): Record<string, string> =>
+    Object.fromEntries(EDITABLE.map((f) => [f, c[f] ?? ""]));
+
   useEffect(() => {
     api
       .getConfig()
       .then((c) => {
         setCfg(c);
-        setDraft(Object.fromEntries(EDITABLE.map((f) => [f, c[f]])));
+        setDraft(fillDraft(c));
       })
       .catch(() => setResult({ ok: false, msg: "Could not load config - is the bridge running?" }));
     api
@@ -62,7 +67,7 @@ export default function SettingsPage() {
       if (r.ok) {
         if (r.config) {
           setCfg(r.config);
-          setDraft(Object.fromEntries(EDITABLE.map((f) => [f, r.config![f]])));
+          setDraft(fillDraft(r.config));
         }
         setKeys({});
         setResult({ ok: true, msg: "Saved and reloaded the bridge." });
