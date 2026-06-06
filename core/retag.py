@@ -32,9 +32,16 @@ async def retag_document(
         if is_term and fact not in entities:
             entities.append(fact)
         context = f"{payload.get('context', '')} {fact}".strip()
+        # Also prepend the fact to the chunk's text. The answer LLM reads payload.text from each
+        # cited hit; context goes into retrieval scoring only. Without this, the rider's name
+        # never reaches the model when it summarizes the photo. Skip if already present so a
+        # second tag for the same fact doesn't keep stacking.
+        text = payload.get("text", "")
+        if fact and fact not in text:
+            text = (f"This is {fact}. " if is_term else f"{fact}. ") + text
         ids.append(cid)
-        payloads.append({**payload, "context": context, "entities": entities})
-        texts.append(_embed_text(context, payload.get("text", ""), " ".join(entities)))
+        payloads.append({**payload, "context": context, "entities": entities, "text": text})
+        texts.append(_embed_text(context, text, " ".join(entities)))
     dense, sparse = await embedder.embed_hybrid(texts)
     points = [
         index.point(cid, d, s, pl)
