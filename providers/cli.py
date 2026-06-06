@@ -183,13 +183,14 @@ class GeminiCLILLM:
         read_file, edit_file, etc.) - visibility only, same trade-off as claude-cli.
         """
         text = f"{system}\n\n{prompt}" if system else prompt
-        argv = [self._binary, "-p", text, "--output-format", "stream-json"]
+        # Empty -p plus prompt on stdin: avoids the Windows command-line length limit (long RAG
+        # prompts blow past ~32k as an argv) and matches how GeminiCLILLM.generate already works.
+        argv = [self._binary, "-p", "", "--output-format", "stream-json"]
         if self.model:
             argv += ["-m", self.model]
         if agent:
             argv += ["--yolo"]
-        # gemini-cli takes the prompt via -p, so its stdin can be empty.
-        async for raw in _stream_lines(argv, ""):
+        async for raw in _stream_lines(argv, text):
             raw = raw.strip()
             if not raw or not raw.startswith("{"):
                 continue
