@@ -247,10 +247,11 @@ export const api = {
       headers: { "content-type": "application/json" },
       body: JSON.stringify(data),
     }),
-  ingest: (file: File, bucket = "default") => {
+  ingest: (file: File, bucket = "default", context = "") => {
     const form = new FormData();
     form.append("file", file);
     form.append("bucket", bucket);
+    if (context.trim()) form.append("context", context.trim());
     return req<IngestResult>("/ingest", { method: "POST", body: form });
   },
 };

@@ -2,7 +2,7 @@
 
 import { Boxes, Database, FileText, Layers, Loader2, ScanLine } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { Fragment, useRef } from "react";
+import { Fragment, useRef, useState } from "react";
 
 import { useBucket } from "@/components/bucket-context";
 import { type IngestDoc, useIngest } from "@/components/ingest-context";
@@ -30,6 +30,7 @@ export function IngestVisual() {
   const { bucket } = useBucket();
   const { doc, stage, note, ingest, playSample } = useIngest();
   const fileInput = useRef<HTMLInputElement>(null);
+  const [ctx, setCtx] = useState("");
 
   const idx =
     stage === "done"
@@ -134,6 +135,12 @@ export function IngestVisual() {
         </div>
       </div>
 
+      <input
+        value={ctx}
+        onChange={(e) => setCtx(e.target.value)}
+        placeholder="optional context for the next upload - who or what it is, facts the model should know…"
+        className="w-full rounded-md border border-line bg-bg px-3 py-2 text-sm text-fg outline-none placeholder:text-faint focus:border-line-2"
+      />
       <div className="flex items-end justify-between">
         <div className="flex gap-7">
           <Metric label="chunks" value={doc ? String(doc.chunks) : "-"} />
@@ -146,7 +153,7 @@ export function IngestVisual() {
             ref={fileInput}
             type="file"
             hidden
-            onChange={(e) => e.target.files?.[0] && ingest(e.target.files[0], bucket)}
+            onChange={(e) => e.target.files?.[0] && ingest(e.target.files[0], bucket, ctx)}
           />
           <Button variant="outline" onClick={() => fileInput.current?.click()}>
             Upload a file

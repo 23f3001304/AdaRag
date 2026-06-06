@@ -60,8 +60,10 @@ export default function ChatPage() {
       saved = [];
     }
     if (!saved.length) saved = [fresh()];
+    /* eslint-disable react-hooks/set-state-in-effect */
     setChats(saved);
     setActiveId(saved[0].id);
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
 
   const active = chats.find((c) => c.id === activeId);
@@ -188,7 +190,7 @@ export default function ChatPage() {
       try {
         const intent = text ? (await api.route(text)).intent : "ingest";
         if (intent === "ingest") {
-          ingestFile(file, bucket);
+          ingestFile(file, bucket, text); // the message doubles as optional context for the file
           pushAssistant(base, {
             role: "assistant",
             text: `Ingesting **${file.name}** into the ${bucket} bucket - track it on the Ingest tab. I'll raise a question there if I can't tell who or what it's about.`,
