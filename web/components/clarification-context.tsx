@@ -1,8 +1,9 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 
 import { useBucket } from "@/components/bucket-context";
+import { useNotify } from "@/components/notification-context";
 import { type Clarification, api } from "@/lib/api";
 
 interface ClarificationState {
@@ -24,16 +25,34 @@ export function useClarifications(): ClarificationState {
 // panel all share one live list. Ingest fires these in the background, so we poll rather than push.
 export function ClarificationProvider({ children }: { children: React.ReactNode }) {
   const { bucket } = useBucket();
+  const { notify } = useNotify();
   const [items, setItems] = useState<Clarification[]>([]);
+  const seen = useRef<Set<string>>(new Set());
+  const primed = useRef(false); // skip toasts on the first poll (those questions aren't "new")
 
   const refresh = useCallback(() => {
     api
       .listClarifications(bucket)
-      .then((r) => setItems(r.clarifications))
+      .then((r) => {
+        setItems(r.clarifications);
+        const fresh = r.clarifications.filter((c) => !seen.current.has(c.id));
+        r.clarifications.forEach((c) => seen.current.add(c.id));
+        if (primed.current && fresh.length) {
+          notify({
+            kind: "ask",
+            title: fresh.length === 1 ? fresh[0].question : `${fresh.length} new questions`,
+            body: fresh[0].source,
+            href: "/ingest",
+          });
+        }
+        primed.current = true;
+      })
       .catch(() => {});
-  }, [bucket]);
+  }, [bucket, notify]);
 
   useEffect(() => {
+    primed.current = false; // a bucket switch shouldn't toast that bucket's existing questions
+    seen.current.clear();
     refresh();
     const id = setInterval(refresh, 10_000);
     // An ingest files its questions from a background task that finishes a few seconds later, so
