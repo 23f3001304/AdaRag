@@ -138,28 +138,12 @@ export interface StreamHandlers {
   thinking: (t: string) => void;
   done: (citations: Citation[], searchQuery?: string) => void;
   error?: (msg: string) => void;
+  gone?: () => void; // a resumed job expired or the server restarted
 }
 
-// Stream a chat turn over SSE, invoking handlers as text/thinking deltas arrive.
-export async function chatStream(
-  body: {
-    session_id: string;
-    message: string;
-    bucket: string;
-    mode?: ModeOption;
-    skill?: SkillOverride;
-  },
-  signal: AbortSignal | undefined,
-  on: StreamHandlers,
-): Promise<void> {
-  const res = await fetch(`${BASE}/chat/stream`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-    signal,
-    cache: "no-store",
-  });
-  if (!res.ok || !res.body) throw new Error(`chat/stream -> ${res.status}`);
+// Parse a chat SSE body, invoking handlers per event. Shared by a fresh stream and a resume.
+async function readSse(res: Response, on: StreamHandlers): Promise<void> {
+  if (!res.ok || !res.body) throw new Error(`chat stream -> ${res.status}`);
   const reader = res.body.getReader();
   const dec = new TextDecoder();
   let buf = "";
@@ -178,8 +162,45 @@ export async function chatStream(
       else if (ev.type === "query") on.query?.(ev.text);
       else if (ev.type === "done") on.done(ev.citations ?? [], ev.search_query);
       else if (ev.type === "error") on.error?.(ev.text);
+      else if (ev.type === "gone") on.gone?.();
     }
   }
+}
+
+// Start a chat turn. The server keeps generating even if this connection drops; resume by message_id.
+export async function chatStream(
+  body: {
+    session_id: string;
+    message: string;
+    message_id: string;
+    bucket: string;
+    mode?: ModeOption;
+    skill?: SkillOverride;
+  },
+  signal: AbortSignal | undefined,
+  on: StreamHandlers,
+): Promise<void> {
+  const res = await fetch(`${BASE}/chat/stream`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+    signal,
+    cache: "no-store",
+  });
+  await readSse(res, on);
+}
+
+// Reconnect to an in-flight or just-finished answer (replays buffered output, then streams the rest).
+export async function resumeStream(
+  messageId: string,
+  signal: AbortSignal | undefined,
+  on: StreamHandlers,
+): Promise<void> {
+  const res = await fetch(`${BASE}/chat/stream/${encodeURIComponent(messageId)}`, {
+    signal,
+    cache: "no-store",
+  });
+  await readSse(res, on);
 }
 
 // A pending ingest-time disambiguation: a file whose subject the detector couldn't name.
@@ -234,6 +255,8 @@ export const api = {
       signal,
     }),
   route: (message: string) => req<{ intent: "ingest" | "ask" }>("/route", json({ message })),
+  stopChat: (messageId: string) =>
+    req<{ stopped: boolean }>(`/chat/stop/${encodeURIComponent(messageId)}`, { method: "POST" }),
   draftSkill: (description: string) =>
     req<{ name: string; persona: string; top_k: number }>("/skills/draft", json({ description })),
   listModes: () => req<{ modes: ModeOption[] }>("/models"),

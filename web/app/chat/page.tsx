@@ -11,7 +11,8 @@ import { useIngest } from "@/components/ingest-context";
 import { ModePicker } from "@/components/mode-picker";
 import { useNotify } from "@/components/notification-context";
 import { type Resource, ResourceModal } from "@/components/resource-modal";
-import { type ModeOption, api, chatStream, citationsToSources } from "@/lib/api";
+import { type ModeOption, api } from "@/lib/api";
+import { driveChat, resumePending } from "@/lib/chat-run";
 import { loadSkills, saveSkills, type Skill } from "@/lib/skills";
 
 interface Chat {
@@ -44,7 +45,12 @@ export default function ChatPage() {
   const [creating, setCreating] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const stop = () => abortRef.current?.abort();
+  const currentJob = useRef<string | null>(null);
+  const resumedJobs = useRef<Set<string>>(new Set());
+  const stop = () => {
+    abortRef.current?.abort();
+    if (currentJob.current) api.stopChat(currentJob.current).catch(() => {});
+  };
 
   useEffect(() => {
     api.listModes().then((r) => setModes(r.modes)).catch(() => {});
@@ -53,6 +59,18 @@ export default function ChatPage() {
     window.addEventListener("focus", sync);
     return () => window.removeEventListener("focus", sync);
   }, []);
+
+  const patchTurn = (chatId: string, fn: (t: Turn) => Turn) =>
+    setChats((cs) => {
+      const next = cs.map((x) => {
+        if (x.id !== chatId || !x.turns.length) return x;
+        const turns = [...x.turns];
+        turns[turns.length - 1] = fn(turns[turns.length - 1]);
+        return { ...x, turns };
+      });
+      localStorage.setItem(KEY, JSON.stringify(next));
+      return next;
+    });
 
   useEffect(() => {
     let saved: Chat[] = [];
@@ -66,6 +84,8 @@ export default function ChatPage() {
     setChats(saved);
     setActiveId(saved[0].id);
     /* eslint-enable react-hooks/set-state-in-effect */
+    // Reconnect to any answer still generating before the reload (server kept producing tokens).
+    resumePending(saved, resumedJobs.current, (chatId, fn) => patchTurn(chatId, fn));
   }, []);
 
   const active = chats.find((c) => c.id === activeId);
@@ -96,18 +116,6 @@ export default function ChatPage() {
   };
   const pushAssistant = (base: Chat[], turn: Turn) =>
     persist(base.map((c) => (c.id === activeId ? { ...c, turns: [...c.turns, turn] } : c)));
-  // Mutate the active chat's last turn (used to grow the streaming answer token by token).
-  const updateLast = (fn: (t: Turn) => Turn) =>
-    setChats((cs) => {
-      const next = cs.map((c) => {
-        if (c.id !== activeId || !c.turns.length) return c;
-        const turns = [...c.turns];
-        turns[turns.length - 1] = fn(turns[turns.length - 1]);
-        return { ...c, turns };
-      });
-      localStorage.setItem(KEY, JSON.stringify(next));
-      return next;
-    });
 
   const createSkill = async (description: string) => {
     if (busy) return;
@@ -210,40 +218,20 @@ export default function ChatPage() {
     const skill = activeSkill ? { persona: activeSkill.persona, top_k: activeSkill.topK } : undefined;
     const ctrl = new AbortController();
     abortRef.current = ctrl;
-    let started = false;
-    let q: string | undefined; // hold the search query until the bubble is created
-    const grow = (fn: (t: Turn) => Turn) => {
-      if (!started) {
-        pushAssistant(base, { role: "assistant", text: "", query: q });
-        started = true;
-      }
-      updateLast(fn);
-    };
-    try {
-      await chatStream(
-        { session_id: active.session, message: text, bucket, mode: active.mode, skill },
-        ctrl.signal,
-        {
-          // Don't open the bubble on the query event - keep the dots until real content arrives.
-          query: (query) => {
-            q = query;
-            if (started) updateLast((t) => ({ ...t, query }));
-          },
-          token: (tok) => grow((t) => ({ ...t, text: t.text + tok })),
-          thinking: (th) => grow((t) => ({ ...t, thinking: (t.thinking ?? "") + th })),
-          done: (cits) => grow((t) => ({ ...t, sources: citationsToSources(cits) })),
-          error: (m) => grow((t) => ({ ...t, text: `${t.text}\n\n_error: ${m}_` })),
-        },
-      );
-    } catch (e) {
-      const aborted = e instanceof DOMException && e.name === "AbortError";
-      grow((t) => ({
-        ...t,
-        text: aborted ? `${t.text} _(stopped)_` : t.text || "request failed - is the CLI bridge running?",
-      }));
-    } finally {
-      setBusy(false);
-    }
+    const messageId = crypto.randomUUID();
+    currentJob.current = messageId;
+    await driveChat({
+      messageId,
+      fresh: { session_id: active.session, message: text, bucket, mode: active.mode, skill },
+      signal: ctrl.signal,
+      ensure: (query) =>
+        pushAssistant(base, { role: "assistant", text: "", query, pending: true, jobId: messageId }),
+      update: (fn) => patchTurn(activeId, fn),
+      onSettled: () => {
+        if (currentJob.current === messageId) currentJob.current = null;
+        setBusy(false);
+      },
+    });
   };
 
   return (

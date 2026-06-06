@@ -21,6 +21,8 @@ export interface Turn {
   sources?: Source[];
   file?: string;
   thinking?: string;
+  pending?: boolean; // answer still generating server-side; resumed by jobId on reload
+  jobId?: string;
 }
 
 export function ChatMessages({

@@ -8,6 +8,7 @@ from fastapi import FastAPI
 
 from api.buckets import router as buckets_router
 from api.chat import router as chat_router
+from api.chat_jobs import ChatJobs
 from api.clarifications import router as clarifications_router
 from api.config import router as config_router
 from api.documents import router as documents_router
@@ -46,6 +47,7 @@ async def lifespan(app: FastAPI):
     app.state.registry = registry
     buckets = BucketManager(qdrant, db, settings, providers)
     app.state.buckets = buckets
+    app.state.chat_jobs = ChatJobs()  # in-flight answers survive a tab refresh/close
     app.state.router = IntentRouter(buckets.llm)  # bucket-independent chat intent classifier
     app.state.study = StudyRunner(buckets, qdrant, settings)  # frontend-triggered tuning study
     try:
