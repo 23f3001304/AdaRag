@@ -25,7 +25,7 @@ from core.config import get_settings
 from core.db import Database
 from index.qdrant_client import create_qdrant
 from ingestion.registry import build_registry
-from orchestrator.router import IntentRouter
+from orchestrator.router import IntentRouter, SkillIntentRouter
 from providers.factory import ProviderFactory
 from tuning.study import StudyRunner
 
@@ -49,6 +49,7 @@ async def lifespan(app: FastAPI):
     app.state.buckets = buckets
     app.state.chat_jobs = ChatJobs(db)  # in-flight answers survive a tab refresh, restart, or close
     app.state.router = IntentRouter(buckets.llm)  # bucket-independent chat intent classifier
+    app.state.skill_router = SkillIntentRouter(buckets.llm)  # ask-vs-create-skill classifier
     app.state.study = StudyRunner(buckets, qdrant, settings)  # frontend-triggered tuning study
     try:
         yield

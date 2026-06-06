@@ -255,6 +255,8 @@ export const api = {
       signal,
     }),
   route: (message: string) => req<{ intent: "ingest" | "ask" }>("/route", json({ message })),
+  routeSkill: (message: string) =>
+    req<{ intent: "skill" | "ask" }>("/route/skill", json({ message })),
   stopChat: (messageId: string) =>
     req<{ stopped: boolean }>(`/chat/stop/${encodeURIComponent(messageId)}`, { method: "POST" }),
   draftSkill: (description: string) =>

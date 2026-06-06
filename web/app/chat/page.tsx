@@ -13,6 +13,7 @@ import { useNotify } from "@/components/notification-context";
 import { type Resource, ResourceModal } from "@/components/resource-modal";
 import { type ModeOption, api } from "@/lib/api";
 import { driveChat, resumePending } from "@/lib/chat-run";
+import { isSkillRequest } from "@/lib/skill-intent";
 import { loadSkills, saveSkills, type Skill } from "@/lib/skills";
 
 interface Chat {
@@ -209,6 +210,8 @@ export default function ChatPage() {
   const send = async (text: string, file: File | null) => {
     if ((!text && !file) || busy || !active) return;
     if (creating && text) return createSkill(text);
+    // Skill intent: a client heuristic gates the LLM call so questions never pay for the round-trip.
+    if (text && !file && (await isSkillRequest(text))) return createSkill(text);
     const base = pushUser(text, file?.name);
     setBusy(true);
     if (file) {
