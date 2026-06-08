@@ -1,6 +1,6 @@
 import { cn } from "@/lib/cn";
 
-/** The Strata mark: four offset strata, one lime - geological layers for the codename. */
+/** AdaRag mark: 4x4 dot-grid "A". Apex pair in accent, rest neutral - same glyph as the favicon. */
 export function Logo({ size = 22, className }: { size?: number; className?: string }) {
   return (
     <svg
@@ -11,10 +11,20 @@ export function Logo({ size = 22, className }: { size?: number; className?: stri
       aria-hidden
       className={cn("shrink-0", className)}
     >
-      <rect x="3" y="3" width="18" height="3" rx="1.5" className="fill-faint" />
-      <rect x="3" y="9" width="13" height="3" rx="1.5" className="fill-accent" />
-      <rect x="8" y="15" width="13" height="3" rx="1.5" className="fill-fg" />
-      <rect x="3" y="21" width="8" height="3" rx="1.5" className="fill-muted" />
+      {/* apex */}
+      <rect x="7"  y="1"  width="4" height="4" rx="0.75" className="fill-accent" />
+      <rect x="13" y="1"  width="4" height="4" rx="0.75" className="fill-accent" />
+      {/* upper legs */}
+      <rect x="1"  y="7"  width="4" height="4" rx="0.75" className="fill-fg" />
+      <rect x="19" y="7"  width="4" height="4" rx="0.75" className="fill-fg" />
+      {/* crossbar */}
+      <rect x="1"  y="13" width="4" height="4" rx="0.75" className="fill-fg" />
+      <rect x="7"  y="13" width="4" height="4" rx="0.75" className="fill-fg" />
+      <rect x="13" y="13" width="4" height="4" rx="0.75" className="fill-fg" />
+      <rect x="19" y="13" width="4" height="4" rx="0.75" className="fill-fg" />
+      {/* lower legs */}
+      <rect x="1"  y="19" width="4" height="4" rx="0.75" className="fill-fg" />
+      <rect x="19" y="19" width="4" height="4" rx="0.75" className="fill-fg" />
     </svg>
   );
 }
