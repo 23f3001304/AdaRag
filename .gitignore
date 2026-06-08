@@ -5,7 +5,7 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
-
+resume_build/
 # uv / virtualenv  (uv.lock IS committed — do not ignore it)
 .venv/
 

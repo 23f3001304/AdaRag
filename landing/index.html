@@ -1,0 +1,701 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AdaRag - adaptive multimodal RAG that runs on one machine</title>
+<meta name="description" content="A single-user RAG that profiles every file, runs a Qdrant hybrid index with bge-m3 + cross-encoder rerank, and answers from text, code, PDFs, images, audio, or video. No cloud, no monthly bill, no data leaving disk." />
+
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='7' y='1' width='4' height='4' rx='0.75' fill='%23B5390F'/%3E%3Crect x='13' y='1' width='4' height='4' rx='0.75' fill='%23B5390F'/%3E%3Crect x='1' y='7' width='4' height='4' rx='0.75' fill='%23E8E2D0'/%3E%3Crect x='19' y='7' width='4' height='4' rx='0.75' fill='%23E8E2D0'/%3E%3Crect x='1' y='13' width='4' height='4' rx='0.75' fill='%23E8E2D0'/%3E%3Crect x='7' y='13' width='4' height='4' rx='0.75' fill='%23E8E2D0'/%3E%3Crect x='13' y='13' width='4' height='4' rx='0.75' fill='%23E8E2D0'/%3E%3Crect x='19' y='13' width='4' height='4' rx='0.75' fill='%23E8E2D0'/%3E%3Crect x='1' y='19' width='4' height='4' rx='0.75' fill='%23E8E2D0'/%3E%3Crect x='19' y='19' width='4' height='4' rx='0.75' fill='%23E8E2D0'/%3E%3C/svg%3E" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+<style>
+  :root {
+    --bg: #0E0E10;
+    --fg: #E8E2D0;
+    --muted: #8A8682;
+    --faint: #58554F;
+    --line: #25241F;
+    --accent: #B5390F;
+    --accent-soft: #C7541D;
+    --ok: #6B8E4E;
+
+    --gap-q: 4px;
+    --gap-h: 8px;
+    --gap: 16px;
+    --gap-d: 32px;
+    --gap-l: 56px;
+    --gap-xl: 160px;
+
+    --col: 60rem;
+    --ease: cubic-bezier(0.2, 0.65, 0.2, 1);
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html {
+    background: var(--bg);
+    color: var(--fg);
+    scrollbar-gutter: stable;
+    scroll-behavior: smooth;
+    scrollbar-width: thin;
+    scrollbar-color: var(--line) transparent;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+  }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: var(--line);
+    border-radius: 5px;
+    border: 2px solid var(--bg);
+    transition: background 200ms var(--ease);
+  }
+  ::-webkit-scrollbar-thumb:hover { background: var(--faint); }
+  ::-webkit-scrollbar-corner { background: transparent; }
+  body {
+    margin: 0;
+    font: 17px/1.6 "Hanken Grotesk", system-ui, -apple-system, sans-serif;
+    letter-spacing: -0.011em;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    opacity: 0;
+    transition: opacity 600ms var(--ease);
+  }
+  body.ready { opacity: 1; }
+  ::selection { background: var(--accent); color: var(--bg); }
+  a { color: var(--fg); text-decoration-color: var(--faint); text-underline-offset: 4px; text-decoration-thickness: 1px; transition: text-decoration-color 160ms; }
+  a:hover { text-decoration-color: var(--accent); }
+
+  .col { width: var(--col); max-width: calc(100% - 48px); margin-left: auto; margin-right: auto; }
+
+  h1, h2, h3 { font-family: "Bricolage Grotesque", serif; font-weight: 700; letter-spacing: -0.025em; text-wrap: balance; margin: 0; }
+  h1 { font-size: clamp(2.4rem, 6.5vw, 4.25rem); line-height: 0.98; letter-spacing: -0.04em; font-weight: 800; }
+  h2 { font-size: clamp(1.6rem, 3vw, 2.1rem); line-height: 1.1; letter-spacing: -0.03em; font-weight: 700; }
+  p {
+    margin: 0 0 var(--gap) 0;
+    color: var(--fg);
+    text-align: justify;
+    text-justify: inter-word;
+    hyphens: auto;
+    -webkit-hyphens: auto;
+  }
+  p.muted { color: var(--muted); }
+  strong { color: var(--fg); font-weight: 600; }
+  small, .mono, code { font-family: "JetBrains Mono", ui-monospace, monospace; }
+  .mono { font-size: 12.5px; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  hr.rule {
+    border: none; border-top: 1px solid var(--line);
+    margin: var(--gap-l) 0;
+  }
+
+  /* ─── reveal ────────────────────────────────────────────────────── */
+  .reveal {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 700ms var(--ease), transform 700ms var(--ease);
+  }
+  .reveal.in {
+    opacity: 1;
+    transform: none;
+  }
+  /* stagger child reveals within a revealed parent */
+  .reveal.in .stagger > *,
+  .reveal.in.stagger > * {
+    animation: rise 600ms var(--ease) both;
+  }
+  .reveal.in .stagger > *:nth-child(1), .reveal.in.stagger > *:nth-child(1) { animation-delay:  40ms; }
+  .reveal.in .stagger > *:nth-child(2), .reveal.in.stagger > *:nth-child(2) { animation-delay: 120ms; }
+  .reveal.in .stagger > *:nth-child(3), .reveal.in.stagger > *:nth-child(3) { animation-delay: 200ms; }
+  .reveal.in .stagger > *:nth-child(4), .reveal.in.stagger > *:nth-child(4) { animation-delay: 280ms; }
+  .reveal.in .stagger > *:nth-child(5), .reveal.in.stagger > *:nth-child(5) { animation-delay: 360ms; }
+  .reveal.in .stagger > *:nth-child(6), .reveal.in.stagger > *:nth-child(6) { animation-delay: 440ms; }
+  .reveal.in .stagger > *:nth-child(7), .reveal.in.stagger > *:nth-child(7) { animation-delay: 520ms; }
+  .reveal.in .stagger > *:nth-child(8), .reveal.in.stagger > *:nth-child(8) { animation-delay: 600ms; }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    body { opacity: 1; transition: none; }
+    .reveal, .reveal.in .stagger > * { opacity: 1; transform: none; animation: none; transition: none; }
+  }
+
+  /* ─── status strip ──────────────────────────────────────────────── */
+  .strip {
+    border-bottom: 1px solid var(--line);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .strip-inner { width: var(--col); max-width: calc(100% - 48px); margin: 0 auto; display: flex; align-items: center; gap: var(--gap-d); padding: 10px 0; }
+  .strip .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); animation: pulse 2.4s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok) 60%, transparent); } 50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--ok) 0%, transparent); } }
+  @media (prefers-reduced-motion: reduce) { .strip .dot { animation: none; } }
+  .strip .sep { color: var(--faint); }
+  .strip .right { margin-left: auto; }
+
+  /* ─── nav ───────────────────────────────────────────────────────── */
+  nav.top {
+    position: sticky; top: 0; z-index: 20;
+    border-bottom: 1px solid var(--line);
+    background: color-mix(in srgb, var(--bg) 92%, transparent);
+    backdrop-filter: saturate(140%) blur(6px);
+  }
+  nav.top .nav-inner { width: var(--col); max-width: calc(100% - 48px); margin: 0 auto; display: flex; align-items: center; gap: var(--gap-d); padding: 14px 0; }
+  .brand { display: flex; align-items: center; gap: 9px; font-family: "Bricolage Grotesque", serif; font-weight: 800; font-size: 16px; letter-spacing: -0.025em; text-decoration: none; }
+  .brand svg rect:nth-child(1), .brand svg rect:nth-child(2) { transition: fill 200ms; }
+  .brand:hover svg rect:nth-child(1), .brand:hover svg rect:nth-child(2) { fill: var(--accent); }
+  nav.top .links { display: flex; gap: 22px; margin-left: auto; font-family: "JetBrains Mono", monospace; font-size: 12.5px; color: var(--muted); }
+  nav.top .links a { text-decoration: none; position: relative; }
+  nav.top .links a::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: -4px; height: 1px;
+    background: var(--accent); transform: scaleX(0); transform-origin: left; transition: transform 220ms var(--ease);
+  }
+  nav.top .links a:hover { color: var(--fg); }
+  nav.top .links a:hover::after { transform: scaleX(1); }
+  nav.top .gh { color: var(--fg); font-family: "JetBrains Mono", monospace; font-size: 12.5px; text-decoration: none; }
+  nav.top .gh:hover { color: var(--accent-soft); }
+
+  /* ─── hero ──────────────────────────────────────────────────────── */
+  .hero { padding: calc(var(--gap-xl) + 48px) 0 var(--gap-l); }
+  .hero h1 { max-width: 17ch; }
+  .hero p.lede {
+    font-size: 19px; line-height: 1.55;
+    color: var(--fg);
+    margin-top: var(--gap-d);
+  }
+  .hero p.sub { color: var(--muted); }
+  .hero .cta {
+    display: flex; gap: var(--gap-l); margin-top: var(--gap-l);
+    font-family: "JetBrains Mono", monospace; font-size: 13px;
+    text-align: left;
+  }
+  .hero .cta a { text-decoration: none; color: var(--fg); position: relative; padding-bottom: 4px; }
+  .hero .cta a::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px;
+    background: currentColor; transform: scaleX(0); transform-origin: left;
+    transition: transform 240ms var(--ease);
+  }
+  .hero .cta a.primary { color: var(--accent-soft); }
+  .hero .cta a.primary::after { background: var(--accent-soft); transform: scaleX(1); }
+  .hero .cta a:hover { color: var(--accent); }
+  .hero .cta a:hover::after { transform: scaleX(1); background: var(--accent); }
+  .hero .cta a .arr { display: inline-block; transition: transform 200ms var(--ease); }
+  .hero .cta a:hover .arr { transform: translateX(4px); }
+
+  /* ─── section ───────────────────────────────────────────────────── */
+  section { padding: var(--gap-xl) 0; }
+  section .anchor {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12px;
+    color: var(--accent-soft);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin: 0 0 var(--gap) 0;
+    text-align: left;
+  }
+  section h2 { max-width: 24ch; margin-bottom: var(--gap); }
+  section p.muted { font-size: 16.5px; }
+
+  /* ─── step list ─────────────────────────────────────────────────── */
+  .steps {
+    margin: var(--gap-d) 0 0 0;
+    padding: 0;
+    list-style: none;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 13.5px;
+    line-height: 1.7;
+  }
+  .steps li {
+    display: grid;
+    grid-template-columns: 24px 110px 1fr;
+    gap: 18px;
+    padding: 10px 12px;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    transition: background 180ms var(--ease), padding-left 180ms var(--ease);
+    cursor: default;
+  }
+  .steps li:last-child { border-bottom: 1px solid var(--line); }
+  .steps li:hover {
+    background: color-mix(in srgb, var(--fg) 4%, transparent);
+    padding-left: 18px;
+  }
+  .steps li .step-id { color: var(--faint); transition: color 180ms; }
+  .steps li:hover .step-id { color: var(--accent-soft); }
+  .steps li .name { color: var(--fg); font-weight: 500; }
+  .steps li .desc { color: var(--muted); }
+  .steps li .desc strong { color: var(--fg); font-weight: 500; }
+  @media (max-width: 640px) {
+    .steps li { grid-template-columns: 18px 1fr; }
+    .steps li .desc { grid-column: 2; padding-top: 2px; }
+  }
+
+  /* ─── inline kv strip ───────────────────────────────────────────── */
+  .kv {
+    margin-top: var(--gap-d);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.9;
+    text-align: left;
+  }
+  .kv span { color: var(--faint); }
+  .kv strong { color: var(--fg); font-weight: 500; }
+
+  /* ─── ledger ────────────────────────────────────────────────────── */
+  .ledger {
+    margin-top: var(--gap-d);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 13px;
+    line-height: 1.65;
+  }
+  .ledger .row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--gap-d);
+    padding: 12px 12px;
+    border-top: 1px solid var(--line);
+    transition: background 180ms var(--ease);
+  }
+  .ledger .row:last-child { border-bottom: 1px solid var(--line); }
+  .ledger .row:not(.head):hover { background: color-mix(in srgb, var(--fg) 4%, transparent); }
+  .ledger .row .head { color: var(--faint); font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; }
+  .ledger .out { color: var(--muted); }
+  .ledger .out::before { content: "✗  "; color: var(--faint); }
+  .ledger .win { color: var(--fg); }
+  .ledger .win::before { content: "✓  "; color: var(--accent-soft); }
+  @media (max-width: 640px) {
+    .ledger .row { grid-template-columns: 1fr; gap: 4px; }
+  }
+
+  /* ─── stack list ────────────────────────────────────────────────── */
+  .stack-list {
+    margin: var(--gap-d) 0 0 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-top: 1px solid var(--line);
+    border-left: 1px solid var(--line);
+    font-family: "JetBrains Mono", monospace;
+    line-height: 1.65;
+  }
+  .stack-list li {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 28px 28px 32px;
+    border-right: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    transition: background 200ms var(--ease);
+    cursor: default;
+    position: relative;
+  }
+  .stack-list li::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 0;
+    width: 0; height: 1px;
+    background: var(--accent);
+    transition: width 320ms var(--ease);
+  }
+  .stack-list li:hover {
+    background: color-mix(in srgb, var(--fg) 3%, transparent);
+  }
+  .stack-list li:hover::before { width: 100%; }
+  .stack-list li .role {
+    color: var(--faint);
+    font-size: 10.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    transition: color 200ms;
+  }
+  .stack-list li:hover .role { color: var(--accent-soft); }
+  .stack-list li .body { display: flex; flex-direction: column; gap: 6px; }
+  .stack-list li .body .name {
+    color: var(--fg);
+    font-family: "Bricolage Grotesque", serif;
+    font-weight: 700;
+    font-size: 19px;
+    letter-spacing: -0.025em;
+    line-height: 1.05;
+  }
+  .stack-list li .body .note {
+    color: var(--muted);
+    font-size: 12.5px;
+    line-height: 1.6;
+  }
+  @media (max-width: 720px) {
+    .stack-list { grid-template-columns: 1fr; }
+  }
+
+  /* ─── author / contact ──────────────────────────────────────────── */
+  .author { margin-top: var(--gap-d); }
+  .author .contact {
+    margin-top: var(--gap-l);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-top: 1px solid var(--line);
+    border-left: 1px solid var(--line);
+    line-height: 1.5;
+  }
+  .author .contact .item {
+    padding: 22px 24px 26px;
+    border-right: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    position: relative;
+    transition: background 200ms var(--ease);
+  }
+  .author .contact .item::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 0;
+    width: 0; height: 1px;
+    background: var(--accent);
+    transition: width 320ms var(--ease);
+  }
+  .author .contact .item:hover {
+    background: color-mix(in srgb, var(--fg) 3%, transparent);
+  }
+  .author .contact .item:hover::before { width: 100%; }
+  .author .contact .item .kind {
+    color: var(--faint);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    transition: color 200ms var(--ease);
+  }
+  .author .contact .item:hover .kind { color: var(--accent-soft); }
+  .author .contact .item a {
+    color: var(--fg);
+    font-family: "Bricolage Grotesque", serif;
+    font-weight: 700;
+    font-size: 17px;
+    letter-spacing: -0.022em;
+    line-height: 1.1;
+    text-decoration: none;
+    word-break: break-word;
+    transition: color 200ms var(--ease);
+  }
+  .author .contact .item a:hover { color: var(--accent-soft); }
+  @media (max-width: 640px) {
+    .author .contact { grid-template-columns: 1fr; }
+  }
+
+  /* ─── bottom blur ───────────────────────────────────────────────── */
+  .bottom-fade {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 120px;
+    pointer-events: none;
+    z-index: 5;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    mask-image: linear-gradient(to top, black 35%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to top, black 35%, transparent 100%);
+    opacity: 1;
+    transition: opacity 280ms var(--ease);
+  }
+  .bottom-fade.hide { opacity: 0; }
+  .bottom-fade::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, color-mix(in srgb, var(--bg) 70%, transparent) 0%, transparent 70%);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .bottom-fade { backdrop-filter: none; -webkit-backdrop-filter: none; }
+  }
+
+  /* ─── footer ────────────────────────────────────────────────────── */
+  footer { border-top: 1px solid var(--line); padding: var(--gap-d) 0; margin-top: var(--gap-xl); font-family: "JetBrains Mono", monospace; font-size: 11.5px; color: var(--faint); }
+  footer .foot-inner { width: var(--col); max-width: calc(100% - 48px); margin: 0 auto; display: flex; align-items: baseline; gap: var(--gap-d); flex-wrap: wrap; }
+  footer .easter { margin-left: auto; color: var(--muted); }
+  footer .easter .blink { display: inline-block; width: 6px; height: 11px; background: var(--accent); vertical-align: -1px; animation: caret 1.1s steps(2) infinite; }
+  @keyframes caret { 50% { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { footer .easter .blink { animation: none; } }
+</style>
+</head>
+<body>
+
+<div class="strip">
+  <div class="strip-inner">
+    <span class="dot" aria-hidden="true"></span>
+    <span>local-only</span>
+    <span class="sep">|</span>
+    <span>runs on one workstation</span>
+    <span class="sep">|</span>
+    <span>data never leaves disk</span>
+    <span class="right num">build 2026.06.07</span>
+  </div>
+</div>
+
+<nav class="top">
+  <div class="nav-inner">
+    <a class="brand" href="/">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <rect x="7"  y="1"  width="4" height="4" rx="0.75" fill="#B5390F"/>
+        <rect x="13" y="1"  width="4" height="4" rx="0.75" fill="#B5390F"/>
+        <rect x="1"  y="7"  width="4" height="4" rx="0.75" fill="#E8E2D0"/>
+        <rect x="19" y="7"  width="4" height="4" rx="0.75" fill="#E8E2D0"/>
+        <rect x="1"  y="13" width="4" height="4" rx="0.75" fill="#E8E2D0"/>
+        <rect x="7"  y="13" width="4" height="4" rx="0.75" fill="#E8E2D0"/>
+        <rect x="13" y="13" width="4" height="4" rx="0.75" fill="#E8E2D0"/>
+        <rect x="19" y="13" width="4" height="4" rx="0.75" fill="#E8E2D0"/>
+        <rect x="1"  y="19" width="4" height="4" rx="0.75" fill="#E8E2D0"/>
+        <rect x="19" y="19" width="4" height="4" rx="0.75" fill="#E8E2D0"/>
+      </svg>
+      AdaRag
+    </a>
+    <div class="links">
+      <a href="#ingest">ingest</a>
+      <a href="#answer">answer</a>
+      <a href="#why">why local</a>
+      <a href="#stack">stack</a>
+      <a href="#by">by</a>
+    </div>
+    <a class="gh" href="https://github.com/23f3001304/AdaRag" target="_blank" rel="noopener">github →</a>
+  </div>
+</nav>
+
+<main class="col">
+  <section class="hero reveal stagger">
+    <h1>A search system for everything on your disk.</h1>
+    <p class="lede">Drop in text, code, PDFs, images, audio, or video. AdaRag profiles each file, chunks it adaptively, embeds it with bge-m3, and answers questions with citations. When a citation is an image, the original pixels are attached to the prompt and the model sees what is actually there, not a caption of it.</p>
+    <p class="lede sub">Nothing leaves the machine. The host CLI bridge routes inference to claude-cli, gemini-cli, or Ollama, so a free Claude subscription pays for chat and Ollama handles the cheap enrichment.</p>
+    <div class="cta">
+      <a class="primary" href="https://github.com/23f3001304/AdaRag" target="_blank" rel="noopener">read the source <span class="arr">→</span></a>
+      <a href="#ingest">how it works</a>
+    </div>
+  </section>
+
+  <hr class="rule" />
+
+  <section id="ingest" class="reveal">
+    <p class="anchor">// ingest</p>
+    <h2>One pipeline. Six modalities.</h2>
+    <p class="muted">A file's modality picks its preprocessor. A profiler picks its chunker. Each chunk is enriched in parallel, embedded into dense and sparse vectors from a single model, and upserted into a per-bucket Qdrant collection. If the subject is ambiguous (an unnamed photo, a document about an unnamed person), the model files clarifications for you to answer later.</p>
+
+    <ol class="steps stagger">
+      <li><span class="step-id">a</span><span class="name">profile</span><span class="desc">modality + structure. code, paper, image, audio, video, prose.</span></li>
+      <li><span class="step-id">b</span><span class="name">preprocess</span><span class="desc">vision caption + OCR, whisper transcript, AST parse, or native text.</span></li>
+      <li><span class="step-id">c</span><span class="name">chunk</span><span class="desc">code AST, paper-section, or prose. picked from the profile.</span></li>
+      <li><span class="step-id">d</span><span class="name">enrich</span><span class="desc">situating context + entity metadata, in parallel. images attached so visual context grounds in pixels.</span></li>
+      <li><span class="step-id">e</span><span class="name">embed</span><span class="desc">bge-m3 dense + sparse from one model. GPU when available.</span></li>
+      <li><span class="step-id">f</span><span class="name">index</span><span class="desc">qdrant named-vector upsert. postgres metadata. ambiguity flagged.</span></li>
+    </ol>
+
+    <div class="kv">
+      <span>collection</span> <strong>adarag_chunks_&lt;bucket&gt;</strong> &nbsp; <span>·</span> &nbsp;
+      <span>dense</span> <strong>1024d bge-m3</strong> &nbsp; <span>·</span> &nbsp;
+      <span>sparse</span> <strong>bge-m3 sparse head</strong>
+    </div>
+  </section>
+
+  <hr class="rule" />
+
+  <section id="answer" class="reveal">
+    <p class="anchor">// answer</p>
+    <h2>Retrieve, rerank, ground in the actual pixels.</h2>
+    <p class="muted">A query rewrite tightens the search string. Qdrant runs dense and sparse prefetches and fuses them server-side with RRF, up to 20 candidates. The bge-reranker-v2-m3 cross-encoder scores the whole pool. A diversity guarantee makes sure every retrieved media modality lands its best chunk in the top-k. The prompt assembles citations; when one is an image or video, the original media is attached so vision-capable LLMs cite what is actually there. The answer streams as SSE deltas with 600 ms Postgres checkpoints, so a refresh, restart, or mid-stream crash never loses the buffer.</p>
+
+    <ol class="steps stagger">
+      <li><span class="step-id">a</span><span class="name">rewrite</span><span class="desc">query transform. tightens search without changing intent.</span></li>
+      <li><span class="step-id">b</span><span class="name">retrieve</span><span class="desc">dense + sparse prefetch. qdrant server-side RRF fusion. 20 candidates.</span></li>
+      <li><span class="step-id">c</span><span class="name">rerank</span><span class="desc">bge-reranker-v2-m3 cross-encoder over the whole pool.</span></li>
+      <li><span class="step-id">d</span><span class="name">diversify</span><span class="desc">every retrieved media modality earns one slot in the top-k.</span></li>
+      <li><span class="step-id">e</span><span class="name">build</span><span class="desc">cited spans + original media attached for vision-capable LLMs.</span></li>
+      <li><span class="step-id">f</span><span class="name">stream</span><span class="desc">SSE deltas. 600 ms postgres checkpoints. real Stop kills the subprocess.</span></li>
+    </ol>
+
+    <div class="kv">
+      <span>scope</span> <strong>strict · medium · lazy</strong> &nbsp; <span>·</span> &nbsp;
+      <span>agent</span> <strong>tool cards inline</strong> &nbsp; <span>·</span> &nbsp;
+      <span>resume</span> <strong>survives refresh + crash</strong>
+    </div>
+  </section>
+
+  <hr class="rule" />
+
+  <section id="why" class="reveal">
+    <p class="anchor">// why local</p>
+    <h2>Some things should not be a SaaS.</h2>
+    <p class="muted">Research notes. Source code. Private photos. The RAG that reads them should not be a billed monthly subscription with a privacy policy you skim. AdaRag owns its index, runs on one workstation, and routes inference through whichever local CLI you already pay for.</p>
+
+    <div class="ledger stagger">
+      <div class="row head">
+        <span class="head">cloud RAG</span>
+        <span class="head">AdaRag</span>
+      </div>
+      <div class="row">
+        <span class="out">data uploaded to a vendor</span>
+        <span class="win">data never leaves your disk</span>
+      </div>
+      <div class="row">
+        <span class="out">$20-$200 per seat per month</span>
+        <span class="win">$0 above what you pay your LLM</span>
+      </div>
+      <div class="row">
+        <span class="out">opaque retrieval, vendor-tuned</span>
+        <span class="win">every knob exposed, swept by Optuna</span>
+      </div>
+      <div class="row">
+        <span class="out">vision answers run on their model</span>
+        <span class="win">claude-cli, gemini-cli, ollama. your pick.</span>
+      </div>
+      <div class="row">
+        <span class="out">"how does it index PDFs?" support ticket</span>
+        <span class="win">~3,000 lines of code. read it.</span>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule" />
+
+  <section id="stack" class="reveal">
+    <p class="anchor">// stack</p>
+    <h2>One job each.</h2>
+
+    <ul class="stack-list stagger">
+      <li>
+        <span class="role">embeddings</span>
+        <div class="body"><span class="name">bge-m3</span><span class="note">dense + sparse from one model. 1024d. local on GPU when available.</span></div>
+      </li>
+      <li>
+        <span class="role">vector store</span>
+        <div class="body"><span class="name">Qdrant</span><span class="note">named dense + sparse vectors. server-side RRF prefetch fusion.</span></div>
+      </li>
+      <li>
+        <span class="role">rerank</span>
+        <div class="body"><span class="name">bge-reranker-v2-m3</span><span class="note">cross-encoder over the full candidate pool, every query.</span></div>
+      </li>
+      <li>
+        <span class="role">metadata</span>
+        <div class="body"><span class="name">Postgres</span><span class="note">documents, chunks, clarifications, chat jobs. async via asyncpg.</span></div>
+      </li>
+      <li>
+        <span class="role">api</span>
+        <div class="body"><span class="name">FastAPI</span><span class="note">Python 3.12. SQLAlchemy 2 async. background tasks for non-blocking ingest.</span></div>
+      </li>
+      <li>
+        <span class="role">frontend</span>
+        <div class="body"><span class="name">Next.js 16</span><span class="note">App Router + Turbopack. React 19. Tailwind v4. SSE via ReadableStream.</span></div>
+      </li>
+      <li>
+        <span class="role">llm bridge</span>
+        <div class="body"><span class="name">host CLI</span><span class="note">uvicorn on the host. proxies claude-cli, gemini-cli, ollama over HTTP.</span></div>
+      </li>
+      <li>
+        <span class="role">optimizer</span>
+        <div class="body"><span class="name">Optuna</span><span class="note">multi-objective. Pareto front of relevance vs latency over golden queries.</span></div>
+      </li>
+    </ul>
+  </section>
+
+  <hr class="rule" />
+
+  <section id="by" class="reveal author">
+    <p class="anchor">// made by</p>
+    <h2>Hemang Choudhary.</h2>
+    <p class="muted">B.Tech IT at MBM University Jodhpur, also reading Data Science and AI at IIT Madras. Built AdaRag because cloud RAG kept asking him to upload his disk to someone else's machine. Trained CycleGAN at DRDO before that. Lives on a 5080, a Sonnet subscription, and three jars of instant coffee.</p>
+
+    <div class="contact">
+      <div class="item">
+        <span class="kind">email</span>
+        <a href="mailto:coehemang@gmail.com">coehemang@gmail.com</a>
+      </div>
+      <div class="item">
+        <span class="kind">portfolio</span>
+        <a href="https://developer.coehemang.dev" target="_blank" rel="noopener">developer.coehemang.dev</a>
+      </div>
+      <div class="item">
+        <span class="kind">github</span>
+        <a href="https://github.com/23f3001304" target="_blank" rel="noopener">github.com/23f3001304</a>
+      </div>
+      <div class="item">
+        <span class="kind">linkedin</span>
+        <a href="https://www.linkedin.com/in/coehemang/" target="_blank" rel="noopener">linkedin.com/in/coehemang</a>
+      </div>
+      <div class="item">
+        <span class="kind">typereal</span>
+        <a href="https://typereal.coehemang.dev" target="_blank" rel="noopener">typereal.coehemang.dev</a>
+      </div>
+      <div class="item">
+        <span class="kind">formdash</span>
+        <a href="https://formdash.coehemang.dev" target="_blank" rel="noopener">formdash.coehemang.dev</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="bottom-fade" aria-hidden="true"></div>
+
+<footer>
+  <div class="foot-inner">
+    <span>AdaRag</span>
+    <span style="color: var(--faint);">codename strata</span>
+    <span style="color: var(--faint);">on one workstation since 2026</span>
+    <span class="easter">made on a 5080. fed bge-m3, claude, qwen3:8b. <span class="blink"></span></span>
+  </div>
+</footer>
+
+<script>
+  document.body.classList.add('ready');
+  const reveals = document.querySelectorAll('.reveal');
+  if ('IntersectionObserver' in window) {
+    const obs = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        if (e.isIntersecting) {
+          e.target.classList.add('in');
+          obs.unobserve(e.target);
+        }
+      }
+    }, { rootMargin: '0px 0px -12% 0px', threshold: 0.05 });
+    reveals.forEach((el) => obs.observe(el));
+    // hero in immediately
+    const hero = document.querySelector('.hero.reveal');
+    if (hero) requestAnimationFrame(() => hero.classList.add('in'));
+  } else {
+    reveals.forEach((el) => el.classList.add('in'));
+  }
+
+  // hide bottom-fade once the scroll position approaches the bottom
+  const fade = document.querySelector('.bottom-fade');
+  if (fade) {
+    const KILL_AT = 240; // px from bottom: fade dies before footer is in view
+    let raf = 0;
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        const dist = document.documentElement.scrollHeight - (window.scrollY + window.innerHeight);
+        fade.classList.toggle('hide', dist < KILL_AT);
+      });
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+  }
+
+  // pushState on nav clicks (CSS handles the smooth scroll)
+  document.querySelectorAll('nav.top .links a[href^="#"]').forEach((a) => {
+    a.addEventListener('click', () => {
+      const id = a.getAttribute('href');
+      history.replaceState(null, '', id);
+    });
+  });
+</script>
+
+</body>
+</html>
